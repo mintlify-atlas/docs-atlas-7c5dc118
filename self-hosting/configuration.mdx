@@ -1,0 +1,162 @@
+---
+title: 'Configuration'
+description: 'Environment variables reference for a self-hosted OpenPanel instance.'
+---
+
+All configuration is driven by environment variables stored in the `.env` file inside the `self-hosting/` directory. The file is loaded by `op-api`, `op-dashboard`, and `op-worker` via the `env_file` directive in `docker-compose.yml`.
+
+The `setup` script generates `.env` from `self-hosting/.env.template` by substituting the values you enter interactively. You can also edit the file directly at any time and then run `bash restart` to apply changes.
+
+## Application
+
+<ParamField path="NODE_ENV" type="string" default="production">
+  Node.js environment. Always set to `production` in self-hosted deployments. Changing this value is not supported.
+</ParamField>
+
+<ParamField path="SELF_HOSTED" type="string" default="true">
+  Tells the application it is running in self-hosted mode. Disables cloud-only features. Always set to `true`.
+</ParamField>
+
+<ParamField path="ALLOW_REGISTRATION" type="string" default="false">
+  When `true`, anyone can register a new account on your instance without an invitation.
+
+  Set this to `true` temporarily to create your first admin account, then set it back to `false`. Use `ALLOW_INVITATION` to add further users.
+</ParamField>
+
+<ParamField path="ALLOW_INVITATION" type="string" default="true">
+  When `true`, existing users can invite new users by email. Requires email to be configured (`RESEND_API_KEY` and `EMAIL_SENDER`).
+</ParamField>
+
+<Warning>
+Do not leave `ALLOW_REGISTRATION="true"` in a production instance. Anyone who can reach your domain will be able to create an account.
+</Warning>
+
+## URLs
+
+<ParamField path="DASHBOARD_URL" type="string" required>
+  The full public URL of the dashboard, without a trailing slash. For example: `https://analytics.example.com`.
+
+  Used by the API to generate absolute links (email links, CORS headers, OAuth redirects). Must match the domain served by Caddy.
+</ParamField>
+
+<ParamField path="API_URL" type="string" required>
+  The full public URL of the API endpoint, without a trailing slash. For example: `https://analytics.example.com/api`.
+
+  The setup script sets this to `<DASHBOARD_URL>/api` automatically. SDKs and the dashboard use this value to know where to send tracking requests.
+</ParamField>
+
+## Performance
+
+<ParamField path="BATCH_SIZE" type="string" default="5000">
+  Maximum number of events the worker processes in a single ClickHouse batch insert. Reduce this value if you see memory pressure on the worker; increase it to improve throughput on high-volume instances.
+</ParamField>
+
+<ParamField path="BATCH_INTERVAL" type="string" default="10000">
+  How often (in milliseconds) the worker flushes the event queue to ClickHouse. Default is 10 000 ms (10 seconds).
+</ParamField>
+
+<ParamField path="OP_WORKER_REPLICAS" type="string" default="1">
+  Number of `op-worker` container replicas to run. Controlled via the `deploy.replicas` key in `docker-compose.yml`. The setup script defaults this to half the number of available CPU cores (minimum 1).
+
+  Update this value and run `bash restart` to scale the worker up or down.
+</ParamField>
+
+## Database
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string used by Prisma. Example:
+
+  ```
+  postgresql://postgres:postgres@op-db:5432/postgres?schema=public
+  ```
+
+  When running the bundled `op-db` service, the host is `op-db` (the Docker service name). If you use an external managed Postgres instance, replace the host, credentials, and database name accordingly.
+</ParamField>
+
+<ParamField path="DATABASE_URL_DIRECT" type="string" required>
+  A direct (non-pooled) connection string for running Prisma migrations. In most self-hosted setups this is identical to `DATABASE_URL`. If you use a connection pooler such as PgBouncer or Supabase pooler in front of Postgres, set this to bypass the pooler.
+
+  The setup script sets this to the same value as `DATABASE_URL`.
+</ParamField>
+
+## ClickHouse
+
+<ParamField path="CLICKHOUSE_URL" type="string" required>
+  ClickHouse HTTP interface URL including the database name. Example:
+
+  ```
+  http://op-ch:8123/openpanel
+  ```
+
+  When running the bundled `op-ch` service, the host is `op-ch`. The database `openpanel` is created automatically by `clickhouse/init-db.sh` on first start.
+
+  If you point this to an external ClickHouse instance, make sure the target database exists before starting the stack.
+</ParamField>
+
+## Redis
+
+<ParamField path="REDIS_URL" type="string" required>
+  Redis connection string. Example:
+
+  ```
+  redis://op-kv:6379
+  ```
+
+  The bundled `op-kv` service runs Redis with `--maxmemory-policy noeviction`, which causes Redis to return errors on writes when memory is full rather than evicting keys. This is important for queue reliability — do not change this policy.
+
+  If you use an external Redis instance with authentication:
+
+  ```
+  redis://:<password>@<host>:<port>
+  ```
+</ParamField>
+
+## Authentication
+
+<ParamField path="COOKIE_SECRET" type="string" required>
+  A random secret used to sign session cookies. The setup script generates a 32-character alphanumeric string automatically.
+
+  To generate one manually:
+
+  ```bash
+  openssl rand -base64 32
+  ```
+</ParamField>
+
+<Warning>
+Rotating `COOKIE_SECRET` invalidates all existing sessions. Every logged-in user will be signed out immediately. Only rotate this value if you believe the secret has been compromised.
+</Warning>
+
+## Email
+
+Email is optional. When not configured, invitation emails and other transactional emails are disabled. `ALLOW_INVITATION` still works but users must be invited through another channel.
+
+<ParamField path="RESEND_API_KEY" type="string">
+  API key from your [Resend](https://resend.com) account. Required if you want OpenPanel to send transactional emails (invitations, password resets).
+</ParamField>
+
+<ParamField path="EMAIL_SENDER" type="string">
+  The `From` address used for outgoing emails. Example: `no-reply@analytics.example.com`.
+
+  The domain in this address must be verified in your Resend account. Required when `RESEND_API_KEY` is set.
+</ParamField>
+
+## Complete `.env` example
+
+```env
+NODE_ENV="production"
+SELF_HOSTED="true"
+BATCH_SIZE="5000"
+BATCH_INTERVAL="10000"
+ALLOW_REGISTRATION="false"
+ALLOW_INVITATION="true"
+REDIS_URL="redis://op-kv:6379"
+CLICKHOUSE_URL="http://op-ch:8123/openpanel"
+DATABASE_URL="postgresql://postgres:postgres@op-db:5432/postgres?schema=public"
+DATABASE_URL_DIRECT="postgresql://postgres:postgres@op-db:5432/postgres?schema=public"
+DASHBOARD_URL="https://analytics.example.com"
+API_URL="https://analytics.example.com/api"
+COOKIE_SECRET="your-random-32-char-secret"
+EMAIL_SENDER="no-reply@analytics.example.com"
+RESEND_API_KEY="re_xxxxxxxxxxxx"
+```

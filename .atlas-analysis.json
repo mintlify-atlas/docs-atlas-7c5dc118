@@ -1,0 +1,113 @@
+{
+  "projectType": "saas",
+  "projectName": "OpenPanel",
+  "projectDescription": "An open-source, self-hostable web and product analytics platform that combines user-level tracking, session replay, funnels, and real-time dashboards — a privacy-first alternative to Mixpanel.",
+  "theme": "palm",
+  "primaryColor": "#848484",
+  "lightColor": "#101010",
+  "darkColor": "#c1c1c1",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "self-hosting/overview"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/web",
+              "sdks/nextjs",
+              "sdks/react-native",
+              "sdks/astro",
+              "sdks/nuxt",
+              "sdks/node"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/events",
+              "concepts/profiles",
+              "concepts/groups",
+              "concepts/session-replay"
+            ]
+          },
+          {
+            "group": "Self-Hosting",
+            "pages": [
+              "self-hosting/docker",
+              "self-hosting/configuration",
+              "self-hosting/updating"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/authentication",
+              "api-reference/rate-limits"
+            ]
+          },
+          {
+            "group": "Tracking",
+            "pages": [
+              "api-reference/track",
+              "api-reference/identify",
+              "api-reference/groups"
+            ]
+          },
+          {
+            "group": "Export",
+            "pages": [
+              "api-reference/export-events",
+              "api-reference/export-charts"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time analytics dashboards with funnels, cohorts, and retention analysis",
+    "Session replay with privacy controls (mask inputs, text masking, sample rates)",
+    "Multi-platform SDKs: Web, Next.js, React Native, Nuxt, Astro, Node.js",
+    "User profiles and identity tracking with group analytics",
+    "Self-hosting via Docker Compose with Postgres, ClickHouse, and Redis",
+    "Cookieless tracking and GDPR compliance out of the box",
+    "A/B testing and variant breakdown support",
+    "Event and funnel-based smart notifications",
+    "Revenue tracking with pending revenue support",
+    "Data export API for events and charts"
+  ],
+  "publicApiSurface": [
+    "POST /track — track events, identify users, manage groups, session replay",
+    "GET /track/device-id — fetch or create a device ID and session ID",
+    "POST /event — ingest raw events",
+    "POST /profile — update a user profile",
+    "POST /profile/increment — increment a profile property",
+    "POST /profile/decrement — decrement a profile property",
+    "GET /export/events — export raw events (authenticated)",
+    "GET /export/charts — export chart data (authenticated)",
+    "OpenPanel.track(name, properties) — SDK: track a custom event",
+    "OpenPanel.identify(payload) — SDK: identify a user",
+    "OpenPanel.upsertGroup(payload) — SDK: create or update a group",
+    "OpenPanel.setGroup(groupId) — SDK: assign current user to a group",
+    "OpenPanel.increment(payload) — SDK: increment a profile property",
+    "OpenPanel.decrement(payload) — SDK: decrement a profile property",
+    "OpenPanel.revenue(amount, properties) — SDK: track a revenue event",
+    "OpenPanel.screenView(path?, properties?) — SDK: track a page/screen view",
+    "OpenPanel.ready() — SDK: flush queued events after manual delay",
+    "OpenPanel.clear() — SDK: reset profile, groups, device/session IDs"
+  ]
+}

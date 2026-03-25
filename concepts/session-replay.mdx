@@ -1,0 +1,206 @@
+---
+title: "Session Replay"
+description: "Record and replay user sessions to understand exactly how people interact with your product. Built in to OpenPanel with no usage caps."
+---
+
+Session replay captures a pixel-accurate recording of a user's browser session — mouse movements, clicks, scrolls, form interactions, and DOM changes — and lets you replay it in the OpenPanel dashboard. It is built directly into the web SDK; no separate library or account is required.
+
+<Note>
+Session replay is a web-only feature. It requires the `@openpanel/web` package (or the `op1.js` script tag build). It is not available in the Node.js, React Native, or other non-browser SDKs.
+</Note>
+
+## Why use session replay
+
+Event analytics tells you *what* happened. Session replay tells you *why*. Use it to:
+
+- Debug unexpected drop-offs in a funnel by watching what confused users
+- Understand how users navigate a new feature before you have enough event data
+- Reproduce a support ticket by finding the session that triggered a bug
+- Validate UX changes by comparing sessions before and after a redesign
+
+## Enabling session replay
+
+Pass `sessionReplay: { enabled: true }` to the `OpenPanel` constructor.
+
+```typescript
+import { OpenPanel } from '@openpanel/web';
+
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  trackScreenViews: true,
+  sessionReplay: {
+    enabled: true,
+  },
+});
+```
+
+For the script-tag build, use the same options:
+
+```html
+<script>
+  window.op = window.op || function(...args) { (window.op.q = window.op.q || []).push(args); };
+  window.op('init', {
+    clientId: 'YOUR_CLIENT_ID',
+    trackScreenViews: true,
+    sessionReplay: {
+      enabled: true,
+    },
+  });
+</script>
+<script src="https://openpanel.dev/op1.js" async></script>
+```
+
+## SessionReplayOptions
+
+<ParamField path="sessionReplay.enabled" type="boolean" required>
+  Set to `true` to enable session replay recording.
+</ParamField>
+
+<ParamField path="sessionReplay.sampleRate" type="number" default="1">
+  Fraction of sessions to record, between `0` and `1`. For example, `0.1` records 10% of sessions. Sampling is evaluated once per page load using `Math.random()`.
+</ParamField>
+
+<ParamField path="sessionReplay.maskAllInputs" type="boolean">
+  When `true`, all input field values are replaced with asterisks in the recording. Recommended for forms that may contain sensitive data.
+</ParamField>
+
+<ParamField path="sessionReplay.maskAllText" type="boolean" default="true">
+  When `true`, all text content on the page is replaced with asterisks. Defaults to `true` for maximum privacy out of the box.
+</ParamField>
+
+<ParamField path="sessionReplay.unmaskTextSelector" type="string">
+  A CSS selector for elements whose text should remain visible even when `maskAllText` is `true`. Example: `'[data-openpanel-unmask]'`.
+</ParamField>
+
+<ParamField path="sessionReplay.blockSelector" type="string">
+  A CSS selector for elements to completely exclude from the recording. Matched elements appear as empty placeholder boxes.
+</ParamField>
+
+<ParamField path="sessionReplay.blockClass" type="string">
+  A CSS class name for elements to exclude from the recording.
+</ParamField>
+
+<ParamField path="sessionReplay.ignoreSelector" type="string">
+  A CSS selector for elements whose interactions (e.g. clicks) should not be recorded, but whose appearance is still captured.
+</ParamField>
+
+<ParamField path="sessionReplay.flushIntervalMs" type="number">
+  How often (in milliseconds) the SDK sends buffered replay chunks to the server.
+</ParamField>
+
+<ParamField path="sessionReplay.maxEventsPerChunk" type="number">
+  Maximum number of DOM events to accumulate before flushing a chunk.
+</ParamField>
+
+<ParamField path="sessionReplay.maxPayloadBytes" type="number">
+  Maximum compressed payload size per chunk in bytes. Chunks exceeding this limit are split before sending. The API enforces a hard limit of 2 MB per chunk.
+</ParamField>
+
+<ParamField path="sessionReplay.scriptUrl" type="string">
+  URL to the replay recorder script. Only used when loading the SDK via a `<script>` tag. When using the npm package with a bundler, the bundler resolves the replay module from the package and this option is ignored.
+</ParamField>
+
+## Privacy controls
+
+OpenPanel defaults to masking all text (`maskAllText: true`) to protect user privacy from the moment you enable replay. Use the following options to selectively reveal content that is safe to record.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  sessionReplay: {
+    enabled: true,
+    maskAllText: true,          // default — hide all text
+    unmaskTextSelector: '[data-public]', // reveal text in safe elements
+    maskAllInputs: true,        // always hide input values
+    blockSelector: '#credit-card-form', // hide entire element
+    ignoreSelector: '.tooltip', // don't record hover/click on tooltips
+  },
+});
+```
+
+### Privacy strategy by data type
+
+| Data type | Recommended approach |
+|---|---|
+| Passwords, card numbers | `maskAllInputs: true` |
+| All user-generated text | `maskAllText: true` (default) |
+| Safe marketing content | `unmaskTextSelector: '[data-public]'` |
+| Sensitive UI panels | `blockSelector: '#sensitive-panel'` |
+| Non-essential interactions | `ignoreSelector: '.analytics-noise'` |
+
+## Sample rates for high-traffic sites
+
+Recording every session generates a large volume of data. Use `sampleRate` to reduce the recording volume to a manageable level.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  sessionReplay: {
+    enabled: true,
+    sampleRate: 0.05, // record 5% of sessions
+  },
+});
+```
+
+<Tip>
+Start with a higher sample rate (e.g. `0.5`) during the first week of a new feature rollout when you want rich qualitative data, then reduce it to `0.05`–`0.1` for steady-state monitoring.
+</Tip>
+
+## No usage caps
+
+Unlike some analytics platforms that limit session replay to a monthly quota (e.g. Mixpanel's tiered replay limits), OpenPanel does not impose replay usage caps. The only practical limits come from your own infrastructure storage and the API's 2 MB per-chunk payload limit.
+
+## How replay data is sent
+
+The recorder uses rrweb under the hood. It captures DOM mutations, input events, mouse positions, and scroll positions, then compresses them into chunks. Each chunk is sent to the OpenPanel API via a `POST /track` request with `type: "replay"`.
+
+Replay chunks are queued until the first regular track event returns a `sessionId`. This ensures all replay chunks for a session are tied to the same session record.
+
+```
+[Page load]
+  → First track event sent → API returns { deviceId, sessionId }
+  → Queued replay chunks flushed with sessionId
+  → Subsequent chunks sent immediately
+```
+
+## How replay is loaded
+
+The replay recorder is loaded lazily — only when `sessionReplay.enabled` is `true` and the session passes the sample rate check.
+
+**npm / bundler:** The replay module is imported with a dynamic `import('./replay')` call. Your bundler code-splits it into a separate chunk that is only downloaded when needed.
+
+**Script tag (`op1.js`):** A second script (`op1-replay.js`) is injected into `<head>` at runtime. You can override the URL with `sessionReplay.scriptUrl` if you self-host the script or use a CDN.
+
+```typescript
+// Custom replay script URL (self-hosted or CDN)
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  sessionReplay: {
+    enabled: true,
+    scriptUrl: 'https://cdn.mycompany.com/op1-replay.js',
+  },
+});
+```
+
+## Full configuration example
+
+```typescript
+import { OpenPanel } from '@openpanel/web';
+
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  trackScreenViews: true,
+  trackOutgoingLinks: true,
+  sessionReplay: {
+    enabled: true,
+    sampleRate: 0.2,          // record 20% of sessions
+    maskAllText: true,        // hide all text by default
+    maskAllInputs: true,      // always hide input values
+    unmaskTextSelector: '[data-public]', // reveal safe content
+    blockSelector: '#payment-form',
+    flushIntervalMs: 5000,    // send chunks every 5 seconds
+    maxEventsPerChunk: 100,
+    maxPayloadBytes: 512_000, // 512 KB per chunk
+  },
+});
+```

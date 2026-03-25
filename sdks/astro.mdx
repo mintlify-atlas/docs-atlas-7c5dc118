@@ -1,0 +1,186 @@
+---
+title: 'Astro SDK'
+description: 'Add OpenPanel analytics to your Astro site using component-based setup and client-side tracking functions.'
+---
+
+The Astro SDK provides Astro components that inject the OpenPanel script and initialization code into your pages, along with client-side tracking functions for use in framework components or inline scripts.
+
+## Installation
+
+<Steps>
+  <Step title="Install the package">
+    <CodeGroup>
+
+    ```bash npm
+    npm install @openpanel/astro
+    ```
+
+    ```bash yarn
+    yarn add @openpanel/astro
+    ```
+
+    ```bash pnpm
+    pnpm add @openpanel/astro
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Add OpenPanelComponent to your layout">
+    Import and render `OpenPanelComponent` inside the `<head>` of your base layout.
+
+    ```astro src/layouts/Layout.astro
+    ---
+    import { OpenPanelComponent } from '@openpanel/astro';
+    ---
+
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <OpenPanelComponent
+          clientId="YOUR_CLIENT_ID"
+          trackScreenViews={true}
+          trackOutgoingLinks={true}
+          trackAttributes={true}
+        />
+      </head>
+      <body>
+        <slot />
+      </body>
+    </html>
+    ```
+  </Step>
+</Steps>
+
+## `OpenPanelComponent` props
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret. Avoid exposing this in client-rendered output.
+</ParamField>
+
+<ParamField path="scriptUrl" type="string" default="https://openpanel.dev/op1.js">
+  Override the URL used to load the OpenPanel script.
+</ParamField>
+
+<ParamField path="trackScreenViews" type="boolean" default="false">
+  Automatically fire a `screen_view` event on URL changes.
+</ParamField>
+
+<ParamField path="trackOutgoingLinks" type="boolean" default="false">
+  Automatically fire a `link_out` event on external link clicks.
+</ParamField>
+
+<ParamField path="trackAttributes" type="boolean" default="false">
+  Track clicks on elements with `data-track` attributes.
+</ParamField>
+
+<ParamField path="trackHashChanges" type="boolean" default="false">
+  Also fire `screen_view` when the URL hash changes.
+</ParamField>
+
+<ParamField path="profileId" type="string">
+  Identify the current user immediately during initialization.
+</ParamField>
+
+<ParamField path="globalProperties" type="Record<string, unknown>">
+  Properties to attach to all events sent from this session.
+
+  ```astro
+  <OpenPanelComponent
+    clientId="YOUR_CLIENT_ID"
+    globalProperties={{ app_version: '2.0.0' }}
+  />
+  ```
+</ParamField>
+
+<ParamField path="filter" type="string">
+  A serialized filter function body (string) injected into an inline script. Return `true` to send an event, `false` to drop it.
+</ParamField>
+
+## Tracking events
+
+Use the exported functions in client-side scripts or framework components (React, Vue, Svelte, etc.) rendered inside Astro.
+
+```astro src/components/SignupButton.astro
+<button id="signup-btn">Sign up</button>
+
+<script>
+  import { track } from '@openpanel/astro';
+
+  document.getElementById('signup-btn')?.addEventListener('click', () => {
+    track('signup_clicked', { location: 'hero' });
+  });
+</script>
+```
+
+### Available functions
+
+| Function | Description |
+|---|---|
+| `track(name, properties?)` | Send a custom event |
+| `screenView(path?, properties?)` | Manually fire a `screen_view` event |
+| `identify(payload)` | Associate the session with a user profile |
+| `increment(payload)` | Increment a profile property |
+| `decrement(payload)` | Decrement a profile property |
+| `setGlobalProperties(properties)` | Attach properties to all future events |
+| `clear()` | Reset profile, groups, and session |
+
+## Identifying users
+
+<Tabs>
+  <Tab title="IdentifyComponent">
+    Render `IdentifyComponent` on any page where you know the current user.
+
+    ```astro src/pages/dashboard.astro
+    ---
+    import { IdentifyComponent } from '@openpanel/astro';
+    const user = await getUser(Astro.request);
+    ---
+
+    <IdentifyComponent
+      profileId={user.id}
+      email={user.email}
+      firstName={user.firstName}
+    />
+    ```
+  </Tab>
+  <Tab title="identify() function">
+    Call `identify()` in a client-side script after the user is known.
+
+    ```astro
+    <script>
+      import { identify } from '@openpanel/astro';
+
+      identify({
+        profileId: 'user_123',
+        email: 'ada@example.com',
+        firstName: 'Ada',
+      });
+    </script>
+    ```
+  </Tab>
+</Tabs>
+
+## Setting global properties
+
+Use `SetGlobalPropertiesComponent` to inject properties that should be attached to all events on a page.
+
+```astro src/pages/index.astro
+---
+import { SetGlobalPropertiesComponent } from '@openpanel/astro';
+const user = await getUser(Astro.request);
+---
+
+<SetGlobalPropertiesComponent plan={user.plan} locale={Astro.preferredLocale} />
+```
+
+## View Transitions support
+
+If you use Astro's View Transitions, `trackScreenViews` will automatically fire on `astro:page-load` since the SDK listens to `pushState` and `locationchange` events.
+
+<Tip>
+  Ensure `OpenPanelComponent` is rendered in a layout that persists across view transitions so the SDK instance is not re-initialized on every page.
+</Tip>

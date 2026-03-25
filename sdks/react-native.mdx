@@ -1,0 +1,203 @@
+---
+title: 'React Native SDK'
+description: 'Track events and user sessions in React Native and Expo applications with offline support and automatic app lifecycle handling.'
+---
+
+The React Native SDK builds on the [base SDK](/sdks/node) and adds:
+
+- Automatic app version and build number properties
+- Offline event queuing with optional persistent storage
+- Automatic flush when the app returns to the foreground
+- Automatic flush when the device comes back online
+
+<Note>
+  This SDK is built for [Expo](https://expo.dev). It depends on `expo-application` and `expo-constants` for device metadata.
+</Note>
+
+## Installation
+
+<Steps>
+  <Step title="Install the package and Expo dependencies">
+    <CodeGroup>
+
+    ```bash npm
+    npm install @openpanel/react-native expo-application expo-constants
+    ```
+
+    ```bash yarn
+    yarn add @openpanel/react-native expo-application expo-constants
+    ```
+
+    ```bash pnpm
+    pnpm add @openpanel/react-native expo-application expo-constants
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Initialize the SDK">
+    Create an SDK instance and export it for use throughout your app.
+
+    ```typescript lib/openpanel.ts
+    import { OpenPanel } from '@openpanel/react-native';
+
+    export const op = new OpenPanel({
+      clientId: 'YOUR_CLIENT_ID',
+    });
+    ```
+  </Step>
+  <Step title="Track your first event">
+    ```typescript
+    import { op } from './lib/openpanel';
+
+    op.track('app_opened');
+    ```
+  </Step>
+</Steps>
+
+## Offline support
+
+By default, events are queued in memory when the device is offline. To persist the queue across app restarts, provide an `AsyncStorage`-compatible adapter.
+
+```typescript lib/openpanel.ts
+import { OpenPanel } from '@openpanel/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+
+export const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  // Persists the queue to AsyncStorage so events survive app restarts
+  storage: AsyncStorage,
+  // Automatically flushes the queue when connectivity is restored
+  networkInfo: NetInfo,
+});
+```
+
+Install the optional dependencies if you want persistent offline support:
+
+```bash
+npx expo install @react-native-async-storage/async-storage @react-native-community/netinfo
+```
+
+## Configuration
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret for server-to-server requests.
+</ParamField>
+
+<ParamField path="apiUrl" type="string" default="https://api.openpanel.dev">
+  Override the API base URL.
+</ParamField>
+
+<ParamField path="storage" type="StorageLike">
+  An `AsyncStorage`-compatible adapter. Provide this to persist the event queue across app restarts.
+
+  The adapter must implement:
+  ```typescript
+  interface StorageLike {
+    getItem(key: string): Promise<string | null>;
+    setItem(key: string, value: string): Promise<void>;
+  }
+  ```
+</ParamField>
+
+<ParamField path="networkInfo" type="NetworkInfoLike">
+  A `NetInfo`-compatible adapter. When provided, the SDK listens for connectivity changes and automatically flushes queued events when the device comes back online.
+
+  The adapter must implement:
+  ```typescript
+  interface NetworkInfoLike {
+    addEventListener(callback: (state: { isConnected: boolean | null }) => void): () => void;
+    fetch(): Promise<{ isConnected: boolean | null }>;
+  }
+  ```
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Queue all events without sending them. Call `ready()` to flush and resume.
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Log SDK activity to the console.
+</ParamField>
+
+<ParamField path="filter" type="(payload: TrackHandlerPayload) => boolean">
+  Drop events by returning `false` from this function.
+</ParamField>
+
+## Methods
+
+The React Native SDK inherits all methods from the [base SDK](/sdks/node#methods) and adds the following.
+
+### `screenView(route, properties?)`
+
+Track a screen transition. Unlike the web SDK, you must provide the route name explicitly.
+
+```typescript
+op.screenView('ProductDetail', { productId: 'prod_123' });
+```
+
+<Note>
+  Call `screenView` on every route change. If you use React Navigation, call it inside a navigation event listener.
+</Note>
+
+### Inherited methods
+
+| Method | Description |
+|---|---|
+| `track(name, properties?)` | Send a custom event |
+| `identify(payload)` | Associate the device with a user profile |
+| `upsertGroup(payload)` | Create or update a group |
+| `setGroup(groupId)` | Assign events to a group |
+| `setGroups(groupIds)` | Assign events to multiple groups |
+| `increment(payload)` | Increment a profile property |
+| `decrement(payload)` | Decrement a profile property |
+| `revenue(amount, properties?)` | Record a revenue event |
+| `setGlobalProperties(properties)` | Attach properties to all future events |
+| `ready()` | Flush queued events and resume sending |
+| `clear()` | Reset profile, groups, and session |
+
+## React Navigation integration
+
+```tsx App.tsx
+import React, { useRef } from 'react';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { op } from './lib/openpanel';
+
+export default function App() {
+  const navigationRef = useNavigationContainerRef();
+
+  return (
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        const currentRoute = navigationRef.getCurrentRoute();
+        if (currentRoute) {
+          op.screenView(currentRoute.name);
+        }
+      }}
+      onStateChange={() => {
+        const currentRoute = navigationRef.getCurrentRoute();
+        if (currentRoute) {
+          op.screenView(currentRoute.name);
+        }
+      }}
+    >
+      {/* your navigators */}
+    </NavigationContainer>
+  );
+}
+```
+
+## Automatic properties
+
+The SDK automatically attaches the following properties to every event:
+
+| Property | Description |
+|---|---|
+| `__version` | App version from `expo-application` |
+| `__buildNumber` | Build number from `expo-application` |
+| `__referrer` | Install referrer on Android (from `expo-application`) |

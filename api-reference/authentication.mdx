@@ -1,0 +1,114 @@
+---
+title: 'Authentication'
+description: 'Learn how to authenticate with the OpenPanel API using client IDs and secrets.'
+---
+
+The OpenPanel API uses header-based authentication. Every request must include at minimum your **client ID**. Requests to server-side endpoints also require your **client secret**.
+
+## Base URL
+
+```
+https://api.openpanel.dev
+```
+
+## Getting your credentials
+
+<Steps>
+  <Step title="Go to the dashboard">
+    Open [dashboard.openpanel.dev](https://dashboard.openpanel.dev) and sign in.
+  </Step>
+  <Step title="Navigate to your project">
+    Select the project you want to track events for.
+  </Step>
+  <Step title="Open Project Settings">
+    Go to **Settings** → **API Keys** to find your client ID and client secret.
+  </Step>
+</Steps>
+
+## Authentication methods
+
+OpenPanel supports two authentication modes depending on where your code runs.
+
+### Client-side (browser / mobile)
+
+For client-side code running in a browser or mobile app, send only your **client ID**. No secret is required or expected — the secret must never be exposed in public code.
+
+CORS allowlisting is configured per project. Requests from domains not on your allowlist will be rejected unless you also provide a valid client secret.
+
+```bash
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'Content-Type: application/json' \
+  --data '{"type":"track","payload":{"name":"page_view"}}'
+```
+
+### Server-side (SDKs, scripts, export)
+
+For server-side code — including backend SDKs, data pipelines, and the Export API — send both your **client ID** and **client secret**. This bypasses CORS enforcement and unlocks additional capabilities such as revenue tracking and data export.
+
+```bash
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{"type":"track","payload":{"name":"order_placed","properties":{"__revenue":4999}}}'
+```
+
+<Warning>
+  Never include your client secret in browser JavaScript, mobile app binaries, or any other client-side code. Treat it like a password. If it is exposed, rotate it immediately in Project Settings.
+</Warning>
+
+## Request headers
+
+<ParamField header="openpanel-client-id" type="string" required>
+  Your project client ID. Must be a valid UUID (e.g. `550e8400-e29b-41d4-a716-446655440000`). Required on every request.
+</ParamField>
+
+<ParamField header="openpanel-client-secret" type="string">
+  Your project client secret. Required for server-side requests, the Export API, and revenue tracking. Never use in browser code.
+</ParamField>
+
+<ParamField header="openpanel-sdk-name" type="string">
+  The name of the SDK making the request (e.g. `js`, `node`, `python`). Set automatically by official SDKs for internal telemetry.
+</ParamField>
+
+<ParamField header="openpanel-sdk-version" type="string">
+  The version of the SDK making the request (e.g. `1.2.3`). Set automatically by official SDKs.
+</ParamField>
+
+## Error responses
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Missing, malformed, or invalid `openpanel-client-id`. For export requests, also returned when the client secret is wrong or absent. |
+| `403 Forbidden` | Your client credentials are valid but do not have permission to access the requested project or resource. |
+
+Example 401 response body:
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Export: Invalid client secret"
+}
+```
+
+## Client ID format
+
+Client IDs must be valid UUIDv4 strings:
+
+```
+550e8400-e29b-41d4-a716-446655440000
+```
+
+The API validates this format on every request and returns a 401 if the format is incorrect.
+
+## Two client types
+
+OpenPanel distinguishes between two client types:
+
+- **Write clients** — used for ingesting events (tracking, identify, groups). These are used by browser and server SDKs.
+- **Read clients** — used for reading and exporting data. Only read clients can access the Export API.
+
+Both types share the same header-based authentication mechanism. Your client type is determined when the API key is created in the dashboard.

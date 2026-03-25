@@ -1,0 +1,275 @@
+---
+title: 'Next.js SDK'
+description: 'Add OpenPanel analytics to your Next.js application using the official SDK, with support for App Router, Pages Router, and server-side tracking.'
+---
+
+The Next.js SDK wraps the [Web SDK](/sdks/web) with Next.js-specific primitives: a script-loading component, a React hook, and an optional API route handler for proxying events through your own server.
+
+## Installation
+
+<Steps>
+  <Step title="Install the package">
+    <CodeGroup>
+
+    ```bash npm
+    npm install @openpanel/nextjs
+    ```
+
+    ```bash yarn
+    yarn add @openpanel/nextjs
+    ```
+
+    ```bash pnpm
+    pnpm add @openpanel/nextjs
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Add the component to your layout">
+    Place `OpenPanelComponent` in your root layout (App Router) or `_app.tsx` (Pages Router). It loads the OpenPanel script and initializes tracking.
+  </Step>
+</Steps>
+
+## App Router setup
+
+Add `OpenPanelComponent` to your root `layout.tsx`:
+
+```tsx app/layout.tsx
+import { OpenPanelComponent } from '@openpanel/nextjs';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head />
+      <body>
+        <OpenPanelComponent
+          clientId="YOUR_CLIENT_ID"
+          trackScreenViews={true}
+          trackOutgoingLinks={true}
+          trackAttributes={true}
+        />
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+## Pages Router setup
+
+Add `OpenPanelComponent` to `_app.tsx`:
+
+```tsx pages/_app.tsx
+import type { AppProps } from 'next/app';
+import { OpenPanelComponent } from '@openpanel/nextjs';
+
+export default function App({ Component, pageProps }: AppProps) {
+  return (
+    <>
+      <OpenPanelComponent
+        clientId="YOUR_CLIENT_ID"
+        trackScreenViews={true}
+        trackOutgoingLinks={true}
+      />
+      <Component {...pageProps} />
+    </>
+  );
+}
+```
+
+## `OpenPanelComponent` props
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret. Only use this in server-rendered contexts where the value is not exposed to the browser.
+</ParamField>
+
+<ParamField path="scriptUrl" type="string" default="https://openpanel.dev/op1.js">
+  Override the URL of the OpenPanel script. Use this when proxying the script through your own domain (see [Route handler](#route-handler)).
+</ParamField>
+
+<ParamField path="trackScreenViews" type="boolean" default="false">
+  Automatically send a `screen_view` event on client-side navigation.
+</ParamField>
+
+<ParamField path="trackOutgoingLinks" type="boolean" default="false">
+  Automatically send a `link_out` event when users click external links.
+</ParamField>
+
+<ParamField path="trackAttributes" type="boolean" default="false">
+  Track clicks on elements with `data-track` attributes.
+</ParamField>
+
+<ParamField path="trackHashChanges" type="boolean" default="false">
+  Also fire `screen_view` when the URL hash changes.
+</ParamField>
+
+<ParamField path="profileId" type="string">
+  Identify the current user immediately on initialization.
+</ParamField>
+
+<ParamField path="globalProperties" type="Record<string, unknown>">
+  Properties to attach to every event sent from this session.
+
+  ```tsx
+  <OpenPanelComponent
+    clientId="YOUR_CLIENT_ID"
+    globalProperties={{ app_version: '2.4.0', environment: 'production' }}
+  />
+  ```
+</ParamField>
+
+<ParamField path="strategy" type="'beforeInteractive' | 'afterInteractive' | 'lazyOnload' | 'worker'" default="'afterInteractive'">
+  Next.js `<Script>` loading strategy for the OpenPanel script.
+</ParamField>
+
+<ParamField path="filter" type="string">
+  A serialized filter function body (string). The function receives each event payload and should return `true` to send or `false` to drop the event. This is a string because it is injected into an inline `<script>` tag.
+</ParamField>
+
+## Tracking events
+
+Use the `useOpenPanel()` hook to send events from any client component.
+
+```tsx app/components/SignUpButton.tsx
+'use client';
+
+import { useOpenPanel } from '@openpanel/nextjs';
+
+export function SignUpButton() {
+  const op = useOpenPanel();
+
+  function handleClick() {
+    op.track('sign_up_clicked', { location: 'hero' });
+  }
+
+  return <button onClick={handleClick}>Sign up</button>;
+}
+```
+
+### Hook methods
+
+All methods proxy to `window.op`, which is initialized by `OpenPanelComponent`.
+
+| Method | Description |
+|---|---|
+| `track(name, properties?)` | Send a custom event |
+| `screenView(path?, properties?)` | Manually fire a screen view event |
+| `identify(payload)` | Associate the session with a user profile |
+| `increment(payload)` | Increment a profile property |
+| `decrement(payload)` | Decrement a profile property |
+| `revenue(amount, properties?)` | Record a revenue event |
+| `pendingRevenue(amount, properties?)` | Queue a revenue event for later |
+| `flushRevenue()` | Send all pending revenue events |
+| `clearRevenue()` | Discard pending revenue events |
+| `getDeviceId()` | Return the current device ID |
+| `fetchDeviceId()` | Async version of `getDeviceId()` (deprecated — use `getDeviceId()`) |
+| `clear()` | Reset profile, groups, and session |
+| `setGlobalProperties(properties)` | Attach properties to all future events |
+
+## Identifying users
+
+<Tabs>
+  <Tab title="Hook">
+    ```tsx
+    'use client';
+
+    import { useOpenPanel } from '@openpanel/nextjs';
+
+    export function AfterLogin({ user }: { user: { id: string; name: string; email: string } }) {
+      const op = useOpenPanel();
+
+      React.useEffect(() => {
+        op.identify({
+          profileId: user.id,
+          firstName: user.name.split(' ')[0],
+          email: user.email,
+        });
+      }, [user.id]);
+
+      return null;
+    }
+    ```
+  </Tab>
+  <Tab title="IdentifyComponent">
+    Render `IdentifyComponent` anywhere in the tree to inject an `identify` call via an inline script.
+
+    ```tsx
+    import { IdentifyComponent } from '@openpanel/nextjs';
+
+    export default function ProfilePage({ user }: { user: { id: string; email: string } }) {
+      return (
+        <>
+          <IdentifyComponent
+            profileId={user.id}
+            email={user.email}
+            firstName={user.name}
+          />
+          {/* page content */}
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Setting global properties
+
+```tsx
+import { SetGlobalPropertiesComponent } from '@openpanel/nextjs';
+
+export default function Layout({ children, user }: { children: React.ReactNode; user: { plan: string } }) {
+  return (
+    <>
+      <SetGlobalPropertiesComponent plan={user.plan} />
+      {children}
+    </>
+  );
+}
+```
+
+## Route handler
+
+Use `createRouteHandler` to proxy OpenPanel tracking requests and the script through your own Next.js server. This avoids ad-blocker interference and ensures accurate IP-based geolocation.
+
+<Steps>
+  <Step title="Create the route file">
+    ```typescript app/api/openpanel/[...openpanel]/route.ts
+    import { createRouteHandler } from '@openpanel/nextjs/server';
+
+    export const { GET, POST } = createRouteHandler();
+    ```
+
+    You can pass a custom API URL if you self-host OpenPanel:
+
+    ```typescript
+    export const { GET, POST } = createRouteHandler({
+      apiUrl: 'https://your-openpanel-instance.example.com',
+    });
+    ```
+  </Step>
+  <Step title="Point the SDK at your proxy">
+    Update `OpenPanelComponent` to send events and load the script through the route:
+
+    ```tsx app/layout.tsx
+    <OpenPanelComponent
+      clientId="YOUR_CLIENT_ID"
+      apiUrl="/api/openpanel"
+      scriptUrl="/api/openpanel/op1.js"
+      trackScreenViews={true}
+    />
+    ```
+  </Step>
+</Steps>
+
+The route handler proxies:
+
+- `GET /api/openpanel/op1.js` — serves the OpenPanel script with a 24-hour cache
+- `POST /api/openpanel/track` — forwards tracking events to the OpenPanel API, forwarding the real client IP
+
+<Tip>
+  The route handler reads `cf-connecting-ip`, `x-forwarded-for`, and `x-vercel-forwarded-for` headers to pass the real client IP to OpenPanel for accurate geolocation.
+</Tip>

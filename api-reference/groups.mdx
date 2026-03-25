@@ -1,0 +1,197 @@
+---
+title: 'Groups'
+description: 'Create groups and assign users to them using the OpenPanel track API.'
+---
+
+Groups represent organizations, teams, accounts, or any other entity that users can belong to. You can create or update a group, and separately assign one or more users to groups.
+
+## Create or update a group
+
+```
+POST https://api.openpanel.dev/track
+```
+
+Send `type: "group"` to upsert a group. If a group with the given `id` already exists for the project, its properties are updated.
+
+### Request body
+
+<ParamField body="type" type="string" required>
+  Must be `"group"`.
+</ParamField>
+
+<ParamField body="payload.id" type="string" required>
+  A stable unique identifier for the group. Must not be empty.
+</ParamField>
+
+<ParamField body="payload.type" type="string" required>
+  A label that categorizes this group (e.g. `"company"`, `"team"`, `"workspace"`). Must not be empty.
+</ParamField>
+
+<ParamField body="payload.name" type="string" required>
+  A human-readable display name for the group. Must not be empty.
+</ParamField>
+
+<ParamField body="payload.properties" type="object">
+  Arbitrary key-value properties to store on the group (e.g. plan, industry, employee count).
+</ParamField>
+
+### Response
+
+Returns HTTP `200` with device and session information:
+
+<ResponseField name="deviceId" type="string">
+  The computed device ID for this request.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  The session ID associated with this device.
+</ResponseField>
+
+### Example
+
+```bash
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "group",
+    "payload": {
+      "id": "org_acme",
+      "type": "company",
+      "name": "Acme Corp",
+      "properties": {
+        "plan": "enterprise",
+        "industry": "Technology",
+        "employee_count": 500
+      }
+    }
+  }'
+```
+
+---
+
+## Assign a user to groups
+
+```
+POST https://api.openpanel.dev/track
+```
+
+Send `type: "assign_group"` to link a user profile to one or more groups. The profile is upserted if it does not exist. If no `profileId` is provided, the assignment is applied to the anonymous device profile.
+
+### Request body
+
+<ParamField body="type" type="string" required>
+  Must be `"assign_group"`.
+</ParamField>
+
+<ParamField body="payload.groupIds" type="string[]" required>
+  An array of group IDs to assign the user to. Each ID must not be empty.
+</ParamField>
+
+<ParamField body="payload.profileId" type="string | number">
+  The ID of the user profile to assign. If omitted, the assignment is applied to the current device's anonymous profile.
+</ParamField>
+
+### Response
+
+Returns HTTP `200` with device and session information:
+
+<ResponseField name="deviceId" type="string">
+  The computed device ID for this request.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  The session ID associated with this device.
+</ResponseField>
+
+### Examples
+
+<CodeGroup>
+
+```bash Assign identified user to groups
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "assign_group",
+    "payload": {
+      "profileId": "user_123",
+      "groupIds": ["org_acme", "team_engineering"]
+    }
+  }'
+```
+
+```bash Assign anonymous device to a group
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "assign_group",
+    "payload": {
+      "groupIds": ["org_acme"]
+    }
+  }'
+```
+
+</CodeGroup>
+
+---
+
+## Full workflow example
+
+The typical workflow is: create the group first, then assign users to it.
+
+```bash
+# Step 1: Create the group
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "group",
+    "payload": {
+      "id": "org_acme",
+      "type": "company",
+      "name": "Acme Corp",
+      "properties": { "plan": "pro" }
+    }
+  }'
+
+# Step 2: Identify the user
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "identify",
+    "payload": {
+      "profileId": "user_123",
+      "email": "jane@acme.com"
+    }
+  }'
+
+# Step 3: Assign the user to the group
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "assign_group",
+    "payload": {
+      "profileId": "user_123",
+      "groupIds": ["org_acme"]
+    }
+  }'
+```
+
+<Tip>
+  Groups can be attached directly to events via the `groups` array in a `type: "track"` payload, without needing to call `assign_group` first. This is useful for quickly associating a single event with a group context.
+</Tip>

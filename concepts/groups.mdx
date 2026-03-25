@@ -1,0 +1,213 @@
+---
+title: "Groups"
+description: "Groups let you associate events and profiles with shared entities like organizations, workspaces, or accounts — essential for B2B analytics."
+---
+
+A group is any entity that one or more users belong to. In a B2B SaaS product, a group typically represents a company or workspace. In a consumer app it might represent a household, a team, or a project. Groups let you answer questions like "how many events did Acme Corp generate this week?" or "which organizations are using feature X?"
+
+## Core concepts
+
+Groups have three operations:
+
+1. **Create or update a group** — `upsertGroup()` stores the group's metadata (name, type, custom properties).
+2. **Assign the current session to a group** — `setGroup()` or `setGroups()` attaches group IDs to the current device/profile so every subsequent event includes them.
+3. **Groups flow through events** — when a track event is sent, the current group IDs are automatically merged into the event payload.
+
+## Creating and updating a group
+
+Call `upsertGroup()` to create a group or update its properties if it already exists.
+
+```typescript
+op.upsertGroup({
+  id: 'org_acme',
+  type: 'organization',
+  name: 'Acme Corp',
+  properties: {
+    plan: 'enterprise',
+    seats: 120,
+    region: 'us-east',
+  },
+});
+```
+
+Method signature:
+
+```typescript
+upsertGroup(payload: GroupPayload): Promise<...>
+```
+
+### GroupPayload type
+
+<ParamField path="body.id" type="string" required>
+  A unique identifier for the group. Must only contain lowercase letters, digits, hyphens, or underscores.
+</ParamField>
+
+<ParamField path="body.type" type="string" required>
+  A category label for the group. Use this to distinguish between different kinds of groups in the same project (e.g. `organization`, `workspace`, `team`).
+</ParamField>
+
+<ParamField path="body.name" type="string" required>
+  A human-readable display name for the group.
+</ParamField>
+
+<ParamField path="body.properties" type="object">
+  Arbitrary key-value pairs describing the group.
+</ParamField>
+
+## Assigning the current session to a group
+
+After creating a group, call `setGroup()` to associate the current device (or profile) with it. All subsequent track events will include this group ID.
+
+```typescript
+// Assign to a single group
+op.setGroup('org_acme');
+
+// Assign to multiple groups at once
+op.setGroups(['org_acme', 'workspace_eng']);
+```
+
+`setGroup()` and `setGroups()` both:
+- Add the group IDs to the SDK's in-memory `groups` array (de-duplicated)
+- Send an `assign_group` event to the API to link the current profile/device to those groups
+
+### AssignGroupPayload type
+
+<ParamField path="body.groupIds" type="string[]" required>
+  One or more group IDs to assign. Each must be a non-empty string.
+</ParamField>
+
+<ParamField path="body.profileId" type="string | number">
+  The profile to assign to the groups. Defaults to the current session's profile ID, or falls back to the device ID for anonymous sessions.
+</ParamField>
+
+## Groups in track events
+
+Once you've called `setGroup()`, the group IDs are automatically included in every `track()` call.
+
+```typescript
+op.setGroup('org_acme');
+
+// This event is automatically tagged with org_acme
+op.track('report_exported', { format: 'csv' });
+```
+
+You can also pass `groups` directly in a track call to override or supplement the session groups for a single event:
+
+```typescript
+op.track('feature_used', {
+  feature: 'api-keys',
+  groups: ['org_acme', 'workspace_eng'], // merged with session groups
+});
+```
+
+Groups from the per-event override are merged (de-duplicated) with the groups already set on the session.
+
+## Complete workflow example
+
+Here is a typical B2B SaaS setup that creates a group, links a user to it, and tracks an event:
+
+```typescript
+import { OpenPanel } from '@openpanel/web';
+
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+});
+
+// 1. Identify the user
+op.identify({
+  profileId: 'user_123',
+  email: 'ada@acme.com',
+  firstName: 'Ada',
+});
+
+// 2. Create/update the organization
+op.upsertGroup({
+  id: 'org_acme',
+  type: 'organization',
+  name: 'Acme Corp',
+  properties: {
+    plan: 'enterprise',
+    seats: 120,
+  },
+});
+
+// 3. Link this session to the organization
+op.setGroup('org_acme');
+
+// 4. Track — event is automatically tagged with org_acme
+op.track('dashboard_viewed');
+```
+
+## Multi-tenant and hierarchical groups
+
+You can assign a user to multiple groups simultaneously. This is useful for products where users belong to both a parent organization and a specific team or workspace.
+
+```typescript
+// Create both groups
+op.upsertGroup({ id: 'org_acme', type: 'organization', name: 'Acme Corp' });
+op.upsertGroup({ id: 'team_eng', type: 'team', name: 'Engineering' });
+
+// Assign to both
+op.setGroups(['org_acme', 'team_eng']);
+
+// Events are now tagged with both groups
+op.track('pull_request_merged', { repo: 'api-service' });
+```
+
+## Use cases
+
+<AccordionGroup>
+  <Accordion title="B2B SaaS — company-level analytics">
+    Track feature adoption, retention, and usage at the company level. Filter your funnel reports by plan tier, company size, or industry by storing those values as group properties.
+
+    ```typescript
+    op.upsertGroup({
+      id: `org_${company.id}`,
+      type: 'organization',
+      name: company.name,
+      properties: {
+        plan: company.plan,
+        employeeCount: String(company.size),
+        industry: company.industry,
+      },
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Multi-workspace products">
+    Users often belong to multiple workspaces (like Slack or Notion). Assign them to each workspace they switch into.
+
+    ```typescript
+    // User switches workspace
+    function onWorkspaceSwitch(workspaceId: string, workspaceName: string) {
+      op.upsertGroup({
+        id: workspaceId,
+        type: 'workspace',
+        name: workspaceName,
+      });
+      op.setGroup(workspaceId);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Shared projects or documents">
+    In tools like Figma or Linear, the "group" might be a project. Tag events with the active project to measure collaboration patterns.
+
+    ```typescript
+    op.upsertGroup({
+      id: `project_${project.id}`,
+      type: 'project',
+      name: project.title,
+    });
+    op.setGroup(`project_${project.id}`);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Group ID format
+
+Group IDs must match the pattern `^[a-z0-9_-]+$` — lowercase letters, digits, hyphens, and underscores only. Use a prefix convention like `org_`, `workspace_`, or `team_` to keep IDs readable and to avoid collisions between different group types.
+
+<Warning>
+Group IDs are case-sensitive and immutable. If you need to rename a group, update the `name` property via `upsertGroup()` — do not create a new group with a different ID, as this will break historical data continuity.
+</Warning>

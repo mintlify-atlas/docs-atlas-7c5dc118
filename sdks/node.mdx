@@ -1,0 +1,338 @@
+---
+title: 'Node.js SDK'
+description: 'Track server-side events, identify users, and manage groups from any Node.js environment using the OpenPanel SDK.'
+---
+
+The Node.js SDK (`@openpanel/sdk`) is the base SDK that powers all other OpenPanel SDKs. Use it for server-side event tracking in any Node.js application — API servers, background jobs, webhooks, or serverless functions.
+
+<CardGroup cols={2}>
+  <Card title="Server-side tracking" icon="server">
+    Send events from your backend without exposing client credentials to the browser.
+  </Card>
+  <Card title="Express middleware" icon="layer-group">
+    Use `@openpanel/express` to attach an `op` instance to every request automatically.
+  </Card>
+</CardGroup>
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install @openpanel/sdk
+```
+
+```bash yarn
+yarn add @openpanel/sdk
+```
+
+```bash pnpm
+pnpm add @openpanel/sdk
+```
+
+</CodeGroup>
+
+## Basic setup
+
+```typescript
+import { OpenPanel } from '@openpanel/sdk';
+
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  clientSecret: 'YOUR_CLIENT_SECRET', // Required for server-side use
+});
+
+await op.track('api_request', {
+  endpoint: '/users',
+  method: 'GET',
+});
+```
+
+<Tip>
+  Use `clientSecret` for server-side tracking to bypass CORS enforcement and to enable revenue tracking. Without it, events will still be accepted but the API validates the origin domain against your project's allowlist.
+</Tip>
+
+## Configuration
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret for server-to-server requests. Required when tracking from Node.js.
+</ParamField>
+
+<ParamField path="apiUrl" type="string" default="https://api.openpanel.dev">
+  Override the API base URL. Useful when self-hosting OpenPanel.
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Queue all events without sending. Call `ready()` to flush and resume.
+</ParamField>
+
+<ParamField path="waitForProfile" type="boolean" deprecated>
+  Queue events until `identify()` is called with a `profileId`. Deprecated — use `disabled: true` with `ready()` instead.
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Log SDK activity to stdout.
+</ParamField>
+
+<ParamField path="filter" type="(payload: TrackHandlerPayload) => boolean">
+  Drop events by returning `false`. Useful for filtering out health-check endpoints or internal traffic.
+
+  ```typescript
+  const op = new OpenPanel({
+    clientId: 'YOUR_CLIENT_ID',
+    clientSecret: 'YOUR_CLIENT_SECRET',
+    filter: (payload) => {
+      if (payload.type === 'track') {
+        return payload.payload.name !== 'health_check';
+      }
+      return true;
+    },
+  });
+  ```
+</ParamField>
+
+## Methods
+
+### `track(name, properties?)`
+
+Send a custom event.
+
+```typescript
+await op.track('order_placed', {
+  profileId: 'user_123', // optional — associate event with a profile
+  orderId: 'ord_456',
+  amount: 149.99,
+  currency: 'USD',
+});
+```
+
+`properties` can include:
+- Any custom key-value pairs
+- `profileId` — associates this event with a specific profile
+- `groups` — array of group IDs to associate this event with
+
+### `identify(payload)`
+
+Create or update a user profile.
+
+```typescript
+await op.identify({
+  profileId: 'user_123',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  email: 'ada@example.com',
+  properties: {
+    plan: 'pro',
+    signupDate: '2024-01-15',
+  },
+});
+```
+
+### `upsertGroup(payload)`
+
+Create or update a group (organization, workspace, team, etc.).
+
+```typescript
+await op.upsertGroup({
+  id: 'org_456',
+  type: 'organization',
+  name: 'Acme Corp',
+  properties: {
+    plan: 'enterprise',
+    seats: 50,
+  },
+});
+```
+
+### `setGroup(groupId)`
+
+Assign a group ID so that all subsequent events are associated with that group.
+
+```typescript
+op.setGroup('org_456');
+```
+
+### `setGroups(groupIds)`
+
+Assign multiple group IDs at once.
+
+```typescript
+op.setGroups(['org_456', 'team_789']);
+```
+
+### `setGlobalProperties(properties)`
+
+Merge properties into every subsequent event sent from this instance.
+
+```typescript
+op.setGlobalProperties({
+  environment: process.env.NODE_ENV,
+  serverRegion: 'us-east-1',
+});
+```
+
+### `increment(payload)`
+
+Increment a numeric property on a user profile.
+
+```typescript
+await op.increment({
+  profileId: 'user_123',
+  property: 'api_calls',
+  value: 1,
+});
+```
+
+### `decrement(payload)`
+
+Decrement a numeric property on a user profile.
+
+```typescript
+await op.decrement({
+  profileId: 'user_123',
+  property: 'credits_remaining',
+  value: 10,
+});
+```
+
+### `revenue(amount, properties?)`
+
+Record a revenue event. The amount is tracked as `__revenue` in the event properties.
+
+```typescript
+await op.revenue(99.00, {
+  profileId: 'user_123',
+  plan: 'pro',
+  currency: 'USD',
+});
+```
+
+To attribute the revenue to a specific device (for cross-device tracking), pass `deviceId`:
+
+```typescript
+await op.revenue(99.00, {
+  deviceId: 'device_abc123',
+  plan: 'pro',
+});
+```
+
+### `ready()`
+
+Flush the event queue and resume sending events. Use when you started with `disabled: true`.
+
+```typescript
+const op = new OpenPanel({ clientId: 'YOUR_CLIENT_ID', disabled: true });
+
+// Queue events during initialization
+op.track('app_started');
+
+// Start sending when ready
+op.ready();
+```
+
+### `clear()`
+
+Reset the profile ID, groups, device ID, and session ID.
+
+```typescript
+op.clear();
+```
+
+### `getDeviceId()` / `getSessionId()`
+
+Return the current device and session IDs (set by the API after the first event).
+
+```typescript
+const deviceId = op.getDeviceId();
+const sessionId = op.getSessionId();
+```
+
+## Express middleware
+
+Install `@openpanel/express` to automatically attach an `OpenPanel` instance to every request.
+
+<Steps>
+  <Step title="Install the package">
+    ```bash
+    npm install @openpanel/express
+    ```
+  </Step>
+  <Step title="Register the middleware">
+    ```typescript
+    import express from 'express';
+    import createMiddleware from '@openpanel/express';
+
+    const app = express();
+
+    app.use(
+      createMiddleware({
+        clientId: 'YOUR_CLIENT_ID',
+        clientSecret: 'YOUR_CLIENT_SECRET',
+        // Automatically track all incoming requests
+        trackRequest: (url) => !url.startsWith('/health'),
+        // Attach the authenticated user's ID to tracked requests
+        getProfileId: (req) => req.user?.id,
+      })
+    );
+    ```
+  </Step>
+  <Step title="Use req.op in route handlers">
+    ```typescript
+    app.post('/checkout', async (req, res) => {
+      await req.op.track('checkout_initiated', {
+        cartValue: req.body.total,
+      });
+
+      // ... handle checkout
+      res.json({ success: true });
+    });
+    ```
+  </Step>
+</Steps>
+
+### Middleware options
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret for server-side requests.
+</ParamField>
+
+<ParamField path="trackRequest" type="(url: string) => boolean">
+  Called for every incoming request. Return `true` to automatically track a `request` event for that URL.
+
+  ```typescript
+  // Track all requests except health checks and static assets
+  trackRequest: (url) => !url.startsWith('/health') && !url.startsWith('/static')
+  ```
+</ParamField>
+
+<ParamField path="getProfileId" type="(req: Request) => string | undefined">
+  Called when `trackRequest` returns `true`. Return the authenticated user's ID to associate the `request` event with a profile.
+
+  ```typescript
+  getProfileId: (req) => req.user?.id
+  ```
+</ParamField>
+
+The middleware also forwards the real client IP (`cf-connecting-ip`, `x-forwarded-for`) and `User-Agent` headers to OpenPanel for accurate geolocation and device detection.
+
+## TypeScript types
+
+```typescript
+import type {
+  OpenPanelOptions,
+  TrackProperties,
+  IdentifyPayload,
+  GroupPayload,
+  IncrementPayload,
+  DecrementPayload,
+  TrackHandlerPayload,
+} from '@openpanel/sdk';
+```

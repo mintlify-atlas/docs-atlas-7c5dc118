@@ -1,0 +1,258 @@
+---
+title: "Events"
+description: "Named actions that represent things users do in your product. Events are the core unit of tracking in OpenPanel."
+---
+
+An event is a named action paired with an optional set of properties. Every time a user does something meaningful — clicking a button, completing a purchase, viewing a screen — you send an event. OpenPanel stores that event, links it to a device and (optionally) a profile, and makes it available for charts, funnels, and retention analysis.
+
+## Track an event
+
+Call `op.track()` with an event name and an optional properties object.
+
+```typescript
+op.track('button_clicked', {
+  label: 'Get started',
+  location: 'hero',
+});
+```
+
+The method signature from the SDK:
+
+```typescript
+track(name: string, properties?: TrackProperties): Promise<...>
+```
+
+Where `TrackProperties` is:
+
+```typescript
+export interface TrackProperties {
+  [key: string]: unknown;
+  profileId?: string;   // override the current profile for this event
+  groups?: string[];    // override the current groups for this event
+}
+```
+
+## TrackPayload type
+
+The full payload sent to the API for a track call:
+
+<ParamField path="body.name" type="string" required>
+  The event name. Must be 1–80 characters. Cannot be a reserved event name.
+</ParamField>
+
+<ParamField path="body.profileId" type="string | number">
+  The profile to associate with this event. Defaults to the current session's profile.
+</ParamField>
+
+<ParamField path="body.groups" type="string[]">
+  Group IDs to associate with this event. Merged with any groups already set via `setGroup()`.
+</ParamField>
+
+<ParamField path="body.properties" type="object">
+  Arbitrary key-value pairs. Values can be strings, numbers, booleans, arrays, or nested objects.
+</ParamField>
+
+## Reserved property names
+
+Properties prefixed with `__` are reserved for OpenPanel's internal use. You can set some of them directly to control behaviour.
+
+| Property | Type | Description |
+|---|---|---|
+| `__path` | `string` | The page URL or route path for this event. Set automatically by the web SDK. |
+| `__title` | `string` | The document title at the time of the event. Set automatically on `screen_view` events. |
+| `__referrer` | `string` | The HTTP referrer. Set automatically from `document.referrer` by the web SDK. |
+| `__revenue` | `integer` | Revenue amount in the smallest currency unit (e.g. cents). Must be a non-negative integer. |
+| `__timestamp` | `string` | ISO 8601 timestamp to backdate the event. Must be no more than 1 minute in the future; events older than 15 minutes are flagged as past-dated. |
+| `__ip` | `string` | Override the IP address used for geo-location. Server-side only. |
+| `__deviceId` | `string` | Override the device ID for this event. Useful for revenue tracking across page navigations. |
+| `__identify` | `IdentifyPayload` | Embed a profile identify call inside a track event. Processed server-side. |
+
+<Warning>
+Do not use the `__` prefix for your own properties. OpenPanel may add new reserved properties in future releases, which could conflict with your data.
+</Warning>
+
+## Auto-tracked events
+
+The web SDK can automatically track common browser events when you enable the corresponding options.
+
+### screen_view
+
+Fired on every navigation when `trackScreenViews: true`. The SDK patches `history.pushState` and `history.replaceState` and listens for `popstate` to detect single-page app transitions.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  trackScreenViews: true,
+});
+```
+
+Each `screen_view` event automatically includes:
+- `__path` — the full URL
+- `__title` — `document.title` at the time of navigation
+
+By default, hash changes (`#section`) do not trigger a new `screen_view`. Enable `trackHashChanges: true` to track them.
+
+### link_out
+
+Fired when a user clicks a link that navigates to a different hostname, when `trackOutgoingLinks: true`.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  trackOutgoingLinks: true,
+});
+```
+
+Properties included:
+- `href` — the full destination URL
+- `text` — the link's inner text, `title` attribute, or the `alt`/`title` of the clicked child element
+
+### Attribute-based tracking
+
+Enable `trackAttributes: true` to automatically track clicks on any `<button>` or `<a>` element that has a `data-track` attribute.
+
+```html
+<button data-track="upgrade_clicked" data-plan="pro" data-location="sidebar">
+  Upgrade to Pro
+</button>
+```
+
+All `data-*` attributes (except `data-track` itself) are converted to camelCase and sent as event properties.
+
+## Custom properties
+
+You can attach any key-value pairs to an event. Values can be strings, numbers, booleans, or nested objects.
+
+```typescript
+op.track('order_completed', {
+  orderId: 'ord_abc123',
+  total: 4999,
+  currency: 'usd',
+  items: [
+    { sku: 'shirt-l', quantity: 2 },
+    { sku: 'hat-m', quantity: 1 },
+  ],
+  customer: {
+    tier: 'gold',
+    isReturning: true,
+  },
+});
+```
+
+<Note>
+Nested objects are supported but deeply nested structures can make filtering in the dashboard harder. Prefer flat properties where possible.
+</Note>
+
+## Global properties
+
+Use `setGlobalProperties()` to attach properties to every subsequent event without repeating yourself. Useful for things like the current app version, experiment variant, or A/B test cohort.
+
+```typescript
+op.setGlobalProperties({
+  appVersion: '2.4.1',
+  experiment: 'checkout-v2',
+});
+
+// Both events will include appVersion and experiment
+op.track('page_viewed');
+op.track('button_clicked', { label: 'Buy now' });
+```
+
+Method signature:
+
+```typescript
+setGlobalProperties(properties: Record<string, unknown>): void
+```
+
+Calling `setGlobalProperties()` multiple times merges the objects — existing keys are overwritten, others are kept.
+
+The web SDK calls `setGlobalProperties({ __referrer: document.referrer })` automatically during initialisation.
+
+## Filtering events
+
+Pass a `filter` function to the constructor to drop events before they are sent. This is useful for filtering out internal users, test traffic, or events that don't meet a threshold.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  filter: (payload) => {
+    // Drop events from internal team members
+    if (payload.type === 'track') {
+      return payload.payload.profileId !== 'internal@company.com';
+    }
+    return true;
+  },
+});
+```
+
+The `filter` receives a `TrackHandlerPayload` — a discriminated union of all payload types:
+
+```typescript
+type TrackHandlerPayload =
+  | { type: 'track';        payload: TrackPayload }
+  | { type: 'identify';     payload: IdentifyPayload }
+  | { type: 'increment';    payload: IncrementPayload }
+  | { type: 'decrement';    payload: DecrementPayload }
+  | { type: 'group';        payload: GroupPayload }
+  | { type: 'assign_group'; payload: AssignGroupPayload }
+  | { type: 'replay';       payload: ReplayPayload }
+```
+
+Return `true` to send the payload, `false` to discard it silently.
+
+## Event name constraints
+
+Event names must:
+- Be between 1 and 80 characters
+- Not match a reserved system name
+- Not contain blocked substrings (SQL injection patterns, path traversal sequences, shell commands, and similar attack payloads are rejected at the API layer)
+
+<Tip>
+Use snake_case event names for consistency with OpenPanel's built-in events (`screen_view`, `link_out`).
+</Tip>
+
+## Revenue tracking
+
+Use `op.revenue()` as a shortcut for tracking a `revenue` event with a `__revenue` property.
+
+```typescript
+op.revenue(4999, {
+  orderId: 'ord_abc123',
+  currency: 'usd',
+});
+```
+
+The `__revenue` value must be a non-negative integer (no floats or strings). Use the smallest currency unit for your currency — cents for USD, pence for GBP, and so on.
+
+## Queueing and delayed sending
+
+By default, events are sent immediately. Two options delay sending:
+
+**`waitForProfile`** — queues all events until `identify()` is called with a `profileId`. This ensures every event is tied to a known user before it reaches the API.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  waitForProfile: true,
+});
+
+// Events queued here until identify() is called
+op.track('app_loaded');
+
+// Flush the queue
+op.identify({ profileId: 'user_123' });
+```
+
+**`disabled`** — queues events until `ready()` is called manually.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  disabled: true,
+});
+
+op.track('app_loaded'); // queued
+
+// Later, when you're ready to start sending
+op.ready();
+```

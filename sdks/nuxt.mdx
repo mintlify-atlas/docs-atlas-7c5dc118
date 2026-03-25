@@ -1,0 +1,178 @@
+---
+title: 'Nuxt SDK'
+description: 'Integrate OpenPanel analytics into your Nuxt 3 application using the official module with auto-imports and optional request proxying.'
+---
+
+The Nuxt module registers a client-side plugin that initializes OpenPanel, auto-imports the `useOpenPanel` composable, and optionally proxies tracking requests through your Nuxt server to avoid ad-blockers.
+
+## Installation
+
+<Steps>
+  <Step title="Install the package">
+    <CodeGroup>
+
+    ```bash npm
+    npm install @openpanel/nuxt
+    ```
+
+    ```bash yarn
+    yarn add @openpanel/nuxt
+    ```
+
+    ```bash pnpm
+    pnpm add @openpanel/nuxt
+    ```
+
+    </CodeGroup>
+  </Step>
+  <Step title="Add the module to nuxt.config.ts">
+    ```typescript nuxt.config.ts
+    export default defineNuxtConfig({
+      modules: ['@openpanel/nuxt'],
+
+      openpanel: {
+        clientId: 'YOUR_CLIENT_ID',
+        trackScreenViews: true,
+        trackOutgoingLinks: true,
+        trackAttributes: true,
+      },
+    });
+    ```
+  </Step>
+  <Step title="Use the composable in your components">
+    `useOpenPanel` is auto-imported — no explicit import needed.
+
+    ```vue components/SignupButton.vue
+    <script setup lang="ts">
+    const op = useOpenPanel();
+
+    function handleClick() {
+      op.track('signup_clicked', { location: 'hero' });
+    }
+    </script>
+
+    <template>
+      <button @click="handleClick">Sign up</button>
+    </template>
+    ```
+  </Step>
+</Steps>
+
+## Module options
+
+Configure the module under the `openpanel` key in `nuxt.config.ts`. These options are passed directly to the [Web SDK](/sdks/web).
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+<ParamField path="clientSecret" type="string">
+  Client secret. Only use this in server-side contexts; do not expose it to the browser.
+</ParamField>
+
+<ParamField path="apiUrl" type="string" default="https://api.openpanel.dev">
+  Override the API base URL. Set automatically to `/api/openpanel` when `proxy: true`.
+</ParamField>
+
+<ParamField path="trackScreenViews" type="boolean" default="true">
+  Automatically fire a `screen_view` event on route changes.
+</ParamField>
+
+<ParamField path="trackOutgoingLinks" type="boolean" default="true">
+  Automatically fire a `link_out` event on external link clicks.
+</ParamField>
+
+<ParamField path="trackAttributes" type="boolean" default="true">
+  Track clicks on elements with `data-track` attributes.
+</ParamField>
+
+<ParamField path="trackHashChanges" type="boolean" default="false">
+  Also fire `screen_view` when the URL hash changes.
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Start with event queuing enabled. Call `ready()` on the OpenPanel instance to flush and resume.
+</ParamField>
+
+<ParamField path="proxy" type="boolean" default="false">
+  Register a Nuxt server route at `/api/openpanel/**` that proxies requests to the OpenPanel API. When enabled, `apiUrl` is automatically set to `/api/openpanel`.
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Log SDK activity to the browser console.
+</ParamField>
+
+## `useOpenPanel` composable
+
+`useOpenPanel()` returns the `OpenPanel` instance created by the module plugin. It is available in all components and composables without an explicit import.
+
+```vue
+<script setup lang="ts">
+const op = useOpenPanel();
+
+onMounted(() => {
+  op.identify({
+    profileId: 'user_123',
+    email: 'ada@example.com',
+  });
+});
+</script>
+```
+
+You can also access the instance through Nuxt's plugin system:
+
+```typescript
+const { $openpanel } = useNuxtApp();
+```
+
+### Available methods
+
+| Method | Description |
+|---|---|
+| `track(name, properties?)` | Send a custom event |
+| `screenView(path?, properties?)` | Manually fire a `screen_view` event |
+| `identify(payload)` | Associate the session with a user profile |
+| `upsertGroup(payload)` | Create or update a group |
+| `setGroup(groupId)` | Assign events to a group |
+| `setGroups(groupIds)` | Assign events to multiple groups |
+| `increment(payload)` | Increment a profile property |
+| `decrement(payload)` | Decrement a profile property |
+| `revenue(amount, properties?)` | Record a revenue event |
+| `setGlobalProperties(properties)` | Attach properties to all future events |
+| `ready()` | Flush queued events and resume sending |
+| `clear()` | Reset profile, groups, and session |
+
+## Proxy mode
+
+Enable `proxy: true` to route all tracking requests through your Nuxt server. This helps bypass ad-blockers and gives OpenPanel the real client IP for geolocation.
+
+```typescript nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@openpanel/nuxt'],
+
+  openpanel: {
+    clientId: 'YOUR_CLIENT_ID',
+    proxy: true, // registers /api/openpanel/** server route
+  },
+});
+```
+
+When `proxy` is enabled, the module:
+
+1. Registers a server route handler at `/api/openpanel/**` using H3.
+2. Sets `apiUrl` to `/api/openpanel` so the client sends events to your server.
+3. Forwards the real client IP via `cf-connecting-ip`, `x-forwarded-for`, or `getRequestIP`.
+
+<Tip>
+  The proxy handler forwards `openpanel-client-id`, `User-Agent`, and the client IP to the OpenPanel API, so all analytics features work correctly through the proxy.
+</Tip>
+
+## TypeScript
+
+The module augments the Nuxt and Vue type declarations so `$openpanel` is fully typed:
+
+```typescript
+// Both of these are typed as OpenPanel
+const { $openpanel } = useNuxtApp();
+const op = useOpenPanel();
+```

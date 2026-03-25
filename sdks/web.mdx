@@ -1,0 +1,364 @@
+---
+title: 'Web SDK'
+description: 'Track events, identify users, and capture sessions on any website with the OpenPanel Web SDK.'
+---
+
+The Web SDK works in any browser environment. Install it via npm for bundler-based projects, or drop in a script tag for script-based sites.
+
+<CardGroup cols={3}>
+  <Card title="Auto screen views" icon="eye">
+    Tracks page navigation automatically on SPAs and hash-based routers.
+  </Card>
+  <Card title="Outgoing link tracking" icon="arrow-up-right-from-square">
+    Captures clicks on external links without any extra code.
+  </Card>
+  <Card title="Session replay" icon="video">
+    Record and replay user sessions with configurable privacy controls.
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Tabs>
+  <Tab title="npm">
+    <Steps>
+      <Step title="Install the package">
+        ```bash
+        npm install @openpanel/web
+        ```
+      </Step>
+      <Step title="Initialize the SDK">
+        ```typescript
+        import { OpenPanel } from '@openpanel/web';
+
+        const op = new OpenPanel({
+          clientId: 'YOUR_CLIENT_ID',
+          trackScreenViews: true,
+          trackOutgoingLinks: true,
+          trackAttributes: true,
+        });
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="Script tag">
+    <Steps>
+      <Step title="Add the init snippet and script to your HTML">
+        ```html
+        <script>
+          window.op = window.op || function() {
+            var n = [];
+            return new Proxy(function() {
+              arguments.length && n.push([].slice.call(arguments));
+            }, {
+              get: function(t, r) {
+                return "q" === r ? n : function() {
+                  n.push([r].concat([].slice.call(arguments)));
+                };
+              },
+              has: function(t, r) { return "q" === r; }
+            });
+          }();
+        </script>
+        <script src="https://openpanel.dev/op1.js" async defer></script>
+        ```
+      </Step>
+      <Step title="Initialize with your client ID">
+        ```html
+        <script>
+          window.op('init', {
+            clientId: 'YOUR_CLIENT_ID',
+            trackScreenViews: true,
+            trackOutgoingLinks: true,
+            trackAttributes: true,
+          });
+        </script>
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+<Note>
+  The CDN script is available at `https://openpanel.dev/op1.js`. It exposes `window.op` and `window.openpanel` after loading.
+</Note>
+
+## Configuration
+
+Pass these options to `new OpenPanel(options)` or `window.op('init', options)`.
+
+### Required
+
+<ParamField path="clientId" type="string" required>
+  Your project's client ID from the OpenPanel dashboard.
+</ParamField>
+
+### Optional
+
+<ParamField path="clientSecret" type="string">
+  Client secret for server-side requests. Do not expose this in client-side code.
+</ParamField>
+
+<ParamField path="apiUrl" type="string" default="https://api.openpanel.dev">
+  Override the API base URL. Useful when proxying requests through your own server.
+</ParamField>
+
+<ParamField path="trackScreenViews" type="boolean" default="false">
+  Automatically track `screen_view` events when the URL changes. Supports `pushState`, `replaceState`, `popstate`, and `hashchange`.
+</ParamField>
+
+<ParamField path="trackOutgoingLinks" type="boolean" default="false">
+  Automatically fire a `link_out` event when a user clicks a link to an external domain.
+</ParamField>
+
+<ParamField path="trackAttributes" type="boolean" default="false">
+  Track clicks on elements that have a `data-track` attribute. Additional `data-*` attributes are included as event properties.
+</ParamField>
+
+<ParamField path="trackHashChanges" type="boolean" default="false">
+  When `trackScreenViews` is enabled, also fire a `screen_view` event when the URL hash changes.
+</ParamField>
+
+<ParamField path="waitForProfile" type="boolean" default="false" deprecated>
+  Queue events until `identify()` is called with a `profileId`. Deprecated — use `disabled: true` with `ready()` instead.
+</ParamField>
+
+<ParamField path="disabled" type="boolean" default="false">
+  Queue all events without sending them. Call `ready()` to flush the queue and resume normal operation.
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Log SDK activity to the browser console.
+</ParamField>
+
+<ParamField path="filter" type="(payload: TrackHandlerPayload) => boolean">
+  A function that receives each event payload before it is sent. Return `false` to drop the event.
+</ParamField>
+
+<ParamField path="sessionReplay" type="SessionReplayOptions">
+  Configure session replay recording. See [Session replay](#session-replay) below.
+</ParamField>
+
+## Methods
+
+### `track(name, properties?)`
+
+Send a custom event.
+
+```typescript
+op.track('button_clicked', {
+  label: 'Sign up',
+  location: 'hero',
+});
+```
+
+### `identify(payload)`
+
+Associate the current device with a user profile.
+
+```typescript
+op.identify({
+  profileId: 'user_123',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  email: 'ada@example.com',
+  properties: {
+    plan: 'pro',
+  },
+});
+```
+
+### `screenView(path?, properties?)`
+
+Manually fire a `screen_view` event. When `trackScreenViews` is enabled this is called automatically; you rarely need to call it directly.
+
+```typescript
+// Use current URL
+op.screenView();
+
+// Specify a path
+op.screenView('/dashboard', { section: 'analytics' });
+```
+
+### `setGlobalProperties(properties)`
+
+Merge properties into every subsequent event.
+
+```typescript
+op.setGlobalProperties({
+  app_version: '2.4.0',
+  environment: 'production',
+});
+```
+
+### `upsertGroup(payload)`
+
+Create or update a group (organization, workspace, team, etc.).
+
+```typescript
+op.upsertGroup({
+  id: 'org_456',
+  type: 'organization',
+  name: 'Acme Corp',
+  properties: {
+    plan: 'enterprise',
+  },
+});
+```
+
+### `setGroup(groupId)`
+
+Assign the current profile and future events to a group.
+
+```typescript
+op.setGroup('org_456');
+```
+
+### `increment(payload)`
+
+Increment a numeric property on the current profile.
+
+```typescript
+op.increment({ profileId: 'user_123', property: 'logins', value: 1 });
+```
+
+### `decrement(payload)`
+
+Decrement a numeric property on the current profile.
+
+```typescript
+op.decrement({ profileId: 'user_123', property: 'credits', value: 5 });
+```
+
+### `revenue(amount, properties?)`
+
+Record a revenue event immediately.
+
+```typescript
+op.revenue(49.99, { plan: 'pro', currency: 'USD' });
+```
+
+### `pendingRevenue(amount, properties?)`
+
+Queue a revenue event in `sessionStorage` without sending it. Call `flushRevenue()` after purchase confirmation to send all pending amounts.
+
+```typescript
+// On checkout page
+op.pendingRevenue(49.99, { plan: 'pro' });
+
+// On success page
+await op.flushRevenue();
+```
+
+### `flushRevenue()`
+
+Send all pending revenue events queued by `pendingRevenue()`, then clear the queue.
+
+### `ready()`
+
+Flush the event queue and resume normal operation. Use this when you initialized with `disabled: true`.
+
+```typescript
+const op = new OpenPanel({ clientId: 'YOUR_CLIENT_ID', disabled: true });
+
+// Later, once consent is granted
+op.ready();
+```
+
+### `clear()`
+
+Reset the current profile, groups, device ID, and session ID. Call this on logout.
+
+```typescript
+op.clear();
+```
+
+## Attribute-based tracking
+
+When `trackAttributes: true` is set, any `<button>` or `<a>` element with a `data-track` attribute fires a custom event on click. Additional `data-*` attributes become event properties.
+
+```html
+<button
+  data-track="upgrade_clicked"
+  data-plan="pro"
+  data-location="pricing_table"
+>
+  Upgrade to Pro
+</button>
+```
+
+This fires `upgrade_clicked` with `{ plan: 'pro', location: 'pricingTable' }` (attribute names are camelCased).
+
+## Session replay
+
+Enable session replay to record and replay user interactions.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  sessionReplay: {
+    enabled: true,
+    sampleRate: 0.1, // Record 10% of sessions
+    maskAllInputs: true,
+    maskAllText: true,
+  },
+});
+```
+
+### Session replay options
+
+<ParamField path="sessionReplay.enabled" type="boolean" required>
+  Enable or disable session replay recording.
+</ParamField>
+
+<ParamField path="sessionReplay.sampleRate" type="number" default="1">
+  Fraction of sessions to record, from `0` (none) to `1` (all). Defaults to recording every session.
+</ParamField>
+
+<ParamField path="sessionReplay.maskAllInputs" type="boolean">
+  Replace all input field values with masked characters in recordings.
+</ParamField>
+
+<ParamField path="sessionReplay.maskAllText" type="boolean" default="true">
+  Replace all visible text with asterisks. Defaults to `true`.
+</ParamField>
+
+<ParamField path="sessionReplay.unmaskTextSelector" type="string">
+  CSS selector for elements whose text should remain visible even when `maskAllText` is `true`.
+
+  ```typescript
+  unmaskTextSelector: '[data-openpanel-unmask]'
+  ```
+</ParamField>
+
+<ParamField path="sessionReplay.blockSelector" type="string">
+  CSS selector for elements to block entirely from recordings (replaced with a placeholder).
+</ParamField>
+
+<ParamField path="sessionReplay.blockClass" type="string">
+  Class name that marks elements to block from recordings.
+</ParamField>
+
+<ParamField path="sessionReplay.ignoreSelector" type="string">
+  CSS selector for elements whose interactions should not be recorded.
+</ParamField>
+
+<ParamField path="sessionReplay.flushIntervalMs" type="number">
+  Interval in milliseconds between replay chunk flushes to the server.
+</ParamField>
+
+<ParamField path="sessionReplay.maxEventsPerChunk" type="number">
+  Maximum number of replay events per chunk sent to the server.
+</ParamField>
+
+<ParamField path="sessionReplay.maxPayloadBytes" type="number">
+  Maximum payload size in bytes per chunk sent to the server.
+</ParamField>
+
+<ParamField path="sessionReplay.scriptUrl" type="string">
+  Custom URL for the replay recorder script. Only applies when loading the SDK via the CDN script tag. When using the npm package, the bundler resolves the replay module automatically.
+</ParamField>
+
+<Warning>
+  Session replay captures user interactions including text visible on screen. Always review your privacy policy and applicable regulations before enabling replay in production. Use `maskAllText` and `maskAllInputs` to redact sensitive content.
+</Warning>

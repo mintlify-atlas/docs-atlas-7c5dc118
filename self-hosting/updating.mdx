@@ -1,0 +1,171 @@
+---
+title: 'Updating OpenPanel'
+description: 'How to update a self-hosted OpenPanel instance to the latest version.'
+---
+
+OpenPanel publishes versioned Docker images on Docker Hub. The self-hosting stack uses major-version tags (`lindesvard/openpanel-api:2`, `lindesvard/openpanel-dashboard:2`, `lindesvard/openpanel-worker:2`) so you automatically pick up patch and minor releases on the same major version when you pull.
+
+<Warning>
+Always back up your data before updating. A failed migration or incompatible image can leave your instance in an unrecoverable state without a backup. See the [Backup recommendations](#backup-recommendations) section below.
+</Warning>
+
+## Update with the helper script
+
+The `update` script handles the full update flow:
+
+```bash
+bash update
+```
+
+This runs the following commands:
+
+```bash
+git pull
+
+echo "Updating services"
+docker compose up -d --pull always --remove-orphans
+
+echo "Done"
+```
+
+Breaking down what each step does:
+
+1. **`git pull`** — Fetches the latest `docker-compose.yml`, Caddy config, and ClickHouse config files from the repository. This ensures any infrastructure changes (new services, updated health checks, configuration file updates) are applied alongside the image update.
+2. **`docker compose up -d --pull always --remove-orphans`** — Pulls the newest image for every service, recreates any containers whose image or configuration has changed, and removes containers for services that no longer exist in the Compose file.
+
+Database migrations run automatically when `op-api` starts, so no separate migration step is required.
+
+<Note>
+The `--pull always` flag forces Docker to check the registry for a newer image on every run, even if the tag already exists locally. This ensures you are never running stale images.
+</Note>
+
+## Docker image tags
+
+| Service | Image |
+|---|---|
+| API | `lindesvard/openpanel-api:2` |
+| Dashboard | `lindesvard/openpanel-dashboard:2` |
+| Worker | `lindesvard/openpanel-worker:2` |
+
+All three images are built from the same monorepo and released together. Do not mix major version tags across services.
+
+## Backup recommendations
+
+Back up both persistent data volumes before applying any update:
+
+### PostgreSQL (`op-db-data`)
+
+```bash
+docker exec op-db pg_dumpall -U postgres > backup-postgres-$(date +%Y%m%d).sql
+```
+
+To restore:
+
+```bash
+docker exec -i op-db psql -U postgres < backup-postgres-<date>.sql
+```
+
+### ClickHouse (`op-ch-data`)
+
+The simplest approach is to stop the stack and copy the volume contents directly:
+
+```bash
+bash stop
+docker run --rm \
+  -v op-ch-data:/data \
+  -v $(pwd)/backups:/backups \
+  alpine tar czf /backups/backup-clickhouse-$(date +%Y%m%d).tar.gz -C /data .
+bash start
+```
+
+For a live backup without stopping ClickHouse, use `clickhouse-backup` or the built-in `BACKUP` SQL command if your ClickHouse version supports it.
+
+## Manual update (without the script)
+
+If you prefer to update without using the `update` script or need to pin to a specific image digest:
+
+<Steps>
+
+<Step title="Pull the latest images">
+
+```bash
+docker pull lindesvard/openpanel-api:2
+docker pull lindesvard/openpanel-dashboard:2
+docker pull lindesvard/openpanel-worker:2
+```
+
+</Step>
+
+<Step title="Recreate the containers">
+
+```bash
+docker compose up -d --remove-orphans
+```
+
+This restarts only the containers whose image has changed.
+
+</Step>
+
+<Step title="Verify migrations ran successfully">
+
+Check the `op-api` logs to confirm migrations completed without errors:
+
+```bash
+docker compose logs op-api
+```
+
+You should see output similar to:
+
+```
+Running migrations...
+...
+pnpm start
+```
+
+</Step>
+
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+
+<Accordion title="Migration failed on startup">
+
+If `op-api` fails to start due to a migration error, check the logs:
+
+```bash
+docker compose logs op-api
+```
+
+Common causes:
+
+- **Database connection refused** — `op-db` is not yet healthy. Wait for the health check to pass and try again.
+- **Migration already applied** — A duplicate migration state can occur if an update was interrupted. Check your Postgres `_prisma_migrations` table and resolve conflicts manually.
+- **Insufficient permissions** — The Postgres user does not have `CREATE TABLE` or `ALTER TABLE` privileges on the schema.
+
+To roll back to the previous image, stop the stack, restore your database backup, and set the image tag in `docker-compose.yml` to the previous version.
+
+</Accordion>
+
+<Accordion title="Container exits immediately after update">
+
+Run `docker compose logs <service>` to read the error. Common causes:
+
+- **Missing environment variable** — A new version may have introduced a required variable. Check the [Configuration](/self-hosting/configuration) page for any new variables.
+- **Volume permissions changed** — Rarely, an image update changes the expected owner of a volume mount. Run `docker compose down` then `docker compose up -d` to let Docker re-initialise the volume.
+
+</Accordion>
+
+<Accordion title="Caddy fails to renew TLS certificate after update">
+
+Caddy stores ACME state in the `op-proxy-data` volume. If you see certificate errors after an update:
+
+1. Check Caddy logs: `docker compose logs op-proxy`
+2. Ensure ports 80 and 443 are reachable from the internet (Let's Encrypt performs HTTP-01 challenges)
+3. Verify your DNS A record still points to the server
+4. If needed, restart only Caddy: `docker compose restart op-proxy`
+
+</Accordion>
+
+</AccordionGroup>

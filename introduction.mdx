@@ -1,0 +1,98 @@
+---
+title: "Introduction"
+description: "OpenPanel is an open-source web and product analytics platform — a privacy-first alternative to Mixpanel, Google Analytics 4, and Plausible."
+---
+
+OpenPanel combines the depth of Mixpanel (funnels, cohorts, user profiles, session replay) with the simplicity and privacy focus of Plausible. It is fully open-source, self-hostable, and built for developers who want complete control over their analytics data.
+
+## What you can do with OpenPanel
+
+<CardGroup cols={2}>
+  <Card title="Advanced analytics" icon="chart-bar">
+    Funnels, cohorts, retention analysis, user profiles, and full session history — all in one platform.
+  </Card>
+  <Card title="Session replay" icon="circle-play">
+    Record and replay user sessions with privacy controls built in. No session limits on any plan.
+  </Card>
+  <Card title="Real-time dashboards" icon="gauge">
+    Live data updates and interactive charts so you see what users are doing right now.
+  </Card>
+  <Card title="A/B testing" icon="flask">
+    Built-in variant testing with detailed event and funnel breakdowns per variant.
+  </Card>
+  <Card title="Smart notifications" icon="bell">
+    Set up alerts triggered by events or funnel conditions without writing custom scripts.
+  </Card>
+  <Card title="Privacy-first tracking" icon="shield-check">
+    Cookieless tracking by default with GDPR-compliant data collection.
+  </Card>
+  <Card title="Custom dashboards" icon="layout-dashboard">
+    Flexible chart creation and data visualization tailored to your product's metrics.
+  </Card>
+  <Card title="Multi-platform SDKs" icon="code">
+    Official SDKs for Web, Next.js, React Native, iOS (Swift), Android (Kotlin), Node.js, and more.
+  </Card>
+</CardGroup>
+
+## How OpenPanel compares
+
+The table below shows how OpenPanel stacks up against other popular analytics platforms.
+
+| Feature | OpenPanel | Mixpanel | GA4 | Plausible |
+|---|---|---|---|---|
+| Open-source | ✅ | ❌ | ❌ | ✅ |
+| Self-hosting | ✅ | ❌ | ❌ | ✅ |
+| Cookieless by default | ✅ | ❌ | ❌ | ✅ |
+| Real-time dashboards | ✅ | ✅ | ❌ | ✅ |
+| Funnels & cohort analysis | ✅ | ✅ | ✅* | ✅*** |
+| User profiles & session history | ✅ | ✅ | ❌ | ❌ |
+| Session replay | ✅ | ✅**** | ❌ | ❌ |
+| Custom dashboards & charts | ✅ | ✅ | ✅ | ❌ |
+| Event & funnel notifications | ✅ | ✅ | ❌ | ❌ |
+| GDPR-compliant tracking | ✅ | ✅ | ❌** | ✅ |
+| SDKs (Web, Swift, Kotlin, React Native) | ✅ | ✅ | ✅ | ❌ |
+| Transparent pricing | ✅ | ❌ | ✅* | ✅ |
+| Built for developers | ✅ | ✅ | ❌ | ✅ |
+| A/B testing & variant breakdowns | ✅ | ✅ | ❌ | ❌ |
+
+> \* GA4 has a free tier but often requires BigQuery (paid) for raw data access.
+>
+> \*\* GA4 has faced GDPR bans in several EU countries due to data transfers to US servers.
+>
+> \*\*\* Plausible supports simple goals only.
+>
+> \*\*\*\* Mixpanel session replay is capped at 5 000 sessions/month on the free plan and 20 000 on paid. OpenPanel has no limit.
+
+## Tech stack
+
+OpenPanel is built on a modern, proven open-source stack.
+
+| Layer | Technology |
+|---|---|
+| Dashboard | Next.js |
+| Event API | Fastify |
+| Relational database | PostgreSQL |
+| Event store | ClickHouse |
+| Cache, pub/sub, queue | Redis + BullMQ |
+| Proxy | Caddy |
+| Auth | Oslo + Arctic |
+| Internal API | tRPC |
+| Styling | Tailwind CSS + shadcn/ui |
+| Email | Resend |
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Track your first event in under 5 minutes using the cloud service.
+  </Card>
+  <Card title="Self-hosting overview" icon="server" href="/self-hosting/overview">
+    Run OpenPanel on your own infrastructure with Docker Compose.
+  </Card>
+  <Card title="SDK reference" icon="code" href="/sdks/web">
+    Explore all official SDKs — Web, Next.js, React Native, Node.js, and more.
+  </Card>
+  <Card title="API reference" icon="webhook" href="/api-reference/authentication">
+    Send events and query data directly via the HTTP API.
+  </Card>
+</CardGroup>

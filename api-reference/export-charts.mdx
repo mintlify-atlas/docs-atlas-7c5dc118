@@ -1,0 +1,218 @@
+---
+title: 'Export Charts'
+description: 'Query aggregated chart data from OpenPanel using the export API.'
+---
+
+The Export Charts endpoint runs a chart query against your event data and returns aggregated time-series results. Use it to embed analytics into your own dashboards or reporting tools.
+
+## Endpoint
+
+```
+GET https://api.openpanel.dev/export/charts
+```
+
+## Authentication
+
+<Warning>
+  This endpoint requires **both** `openpanel-client-id` and `openpanel-client-secret`. Requests with only a client ID will be rejected with `401 Unauthorized`. Only **read clients** (not write clients) can access the Export API.
+</Warning>
+
+## Rate limit
+
+100 requests per 10 seconds, keyed by `openpanel-client-id`. See [Rate Limits](/api-reference/rate-limits) for details.
+
+## Query parameters
+
+<ParamField query="projectId" type="string">
+  The ID of the project to query. Also accepted as `project_id`. Defaults to the project scoped to your client credential if omitted.
+</ParamField>
+
+<ParamField query="series" type="object[]">
+  Array of event series to include in the chart. Each series is an object with the following fields:
+
+  | Field | Type | Description |
+  |-------|------|-------------|
+  | `name` | `string` | The event name to query (e.g. `page_view`). |
+  | `segment` | `string` | Aggregation method. One of: `event`, `user`, `session`, `group`, `user_average`, `one_event_per_user`, `property_sum`, `property_average`, `property_max`, `property_min`. Defaults to `event`. |
+  | `property` | `string` | Property to aggregate on (required for `property_sum`, `property_average`, `property_max`, `property_min` segments). |
+  | `filters` | `object[]` | Array of filters to apply to this event series. |
+
+  Encode as JSON in the query string. Also accepted as `events` for backward compatibility.
+</ParamField>
+
+<ParamField query="interval" type="string" default="day">
+  Time granularity for data points. One of: `minute`, `hour`, `day`, `week`, `month`.
+</ParamField>
+
+<ParamField query="range" type="string" default="30d">
+  Predefined time range. One of:
+
+  `30min`, `lastHour`, `today`, `yesterday`, `7d`, `30d`, `6m`, `12m`, `monthToDate`, `lastMonth`, `yearToDate`, `lastYear`, `custom`.
+
+  Use `custom` together with `startDate` and `endDate` for a specific date range.
+</ParamField>
+
+<ParamField query="startDate" type="string">
+  Custom start date (ISO 8601). Overrides `range` if provided. Use with `range=custom`.
+</ParamField>
+
+<ParamField query="endDate" type="string">
+  Custom end date (ISO 8601). Overrides `range` if provided. Use with `range=custom`.
+</ParamField>
+
+<ParamField query="previous" type="boolean" default="false">
+  When `true`, includes comparison data from the previous equivalent period for each data point.
+</ParamField>
+
+<ParamField query="breakdowns" type="object[]">
+  Array of breakdown dimensions. Each breakdown is an object with a `name` field (the property name to break down by, e.g. `country`, `browser`).
+</ParamField>
+
+## Series filters
+
+Each filter in a series `filters` array has the following shape:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | The property name to filter on. |
+| `operator` | `string` | One of: `is`, `isNot`, `contains`, `doesNotContain`, `startsWith`, `endsWith`, `regex`, `isNull`, `isNotNull`, `gt`, `lt`, `gte`, `lte`. |
+| `value` | `array` | Array of values to match against. |
+
+## Response
+
+<ResponseField name="series" type="object[]" required>
+  Array of chart series results.
+  <Expandable title="series item properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for this series.
+    </ResponseField>
+    <ResponseField name="names" type="string[]">
+      Display name(s) for this series.
+    </ResponseField>
+    <ResponseField name="event" type="object">
+      Event definition for this series.
+      <Expandable title="event properties">
+        <ResponseField name="event.name" type="string">
+          The event name.
+        </ResponseField>
+        <ResponseField name="event.breakdowns" type="object">
+          Breakdown dimension values for this series (when using breakdowns).
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="metrics" type="object">
+      Aggregate metrics for the full time range.
+      <Expandable title="metrics properties">
+        <ResponseField name="metrics.sum" type="number">Total sum.</ResponseField>
+        <ResponseField name="metrics.average" type="number">Average value.</ResponseField>
+        <ResponseField name="metrics.min" type="number">Minimum value.</ResponseField>
+        <ResponseField name="metrics.max" type="number">Maximum value.</ResponseField>
+        <ResponseField name="metrics.count" type="number">Event count (may be undefined for some segments).</ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="data" type="object[]">
+      Time-series data points.
+      <Expandable title="data point properties">
+        <ResponseField name="date" type="string">ISO 8601 date/datetime for this data point.</ResponseField>
+        <ResponseField name="count" type="number">Value for this interval.</ResponseField>
+        <ResponseField name="previous" type="object">Previous period comparison value (present when `previous=true`).</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="metrics" type="object" required>
+  Aggregate metrics across all series combined.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```bash Page views over the last 30 days
+curl 'https://api.openpanel.dev/export/charts?projectId=<project-id>&series=[{"name":"page_view","segment":"event"}]&range=30d&interval=day' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Unique users per week
+curl 'https://api.openpanel.dev/export/charts?projectId=<project-id>&series=[{"name":"page_view","segment":"user"}]&interval=week&range=12m' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Revenue sum with country breakdown
+curl 'https://api.openpanel.dev/export/charts?projectId=<project-id>&series=[{"name":"order_placed","segment":"property_sum","property":"__revenue"}]&breakdowns=[{"name":"country"}]&range=30d' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Custom date range with previous period
+curl 'https://api.openpanel.dev/export/charts?projectId=<project-id>&series=[{"name":"signup","segment":"user"}]&range=custom&startDate=2024-01-01&endDate=2024-01-31&previous=true&interval=day' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "series": [
+    {
+      "id": "A",
+      "names": ["page_view"],
+      "event": {
+        "name": "page_view"
+      },
+      "metrics": {
+        "sum": 15420,
+        "average": 514,
+        "min": 210,
+        "max": 980,
+        "count": 30
+      },
+      "data": [
+        {
+          "date": "2024-01-01T00:00:00.000Z",
+          "count": 480,
+          "previous": {
+            "value": 430,
+            "diff": 50,
+            "state": "positive"
+          }
+        },
+        {
+          "date": "2024-01-02T00:00:00.000Z",
+          "count": 512,
+          "previous": {
+            "value": 398,
+            "diff": 114,
+            "state": "positive"
+          }
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "sum": 15420,
+    "average": 514,
+    "min": 210,
+    "max": 980,
+    "count": 30
+  }
+}
+```
+
+## Error responses
+
+| Status | Description |
+|--------|-------------|
+| `400 Bad Request` | Missing `projectId` or invalid query parameters. |
+| `401 Unauthorized` | Missing or invalid client ID or secret. |
+| `403 Forbidden` | Valid credentials but no access to the requested project. |
+| `404 Not Found` | The specified `projectId` does not exist in your organization. |
+| `429 Too Many Requests` | Rate limit exceeded. Wait 10 seconds before retrying. |
+
+<Tip>
+  The chart engine always uses a `linear` chart type and `sum` metric internally when called via the Export API. To change the aggregation method, adjust the `segment` field on each series item instead.
+</Tip>

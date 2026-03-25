@@ -1,0 +1,154 @@
+---
+title: 'Export Events'
+description: 'Retrieve raw event data from OpenPanel using the export API.'
+---
+
+The Export Events endpoint returns a paginated list of raw events for a project. Use it to build reports, sync data to a data warehouse, or audit tracked activity.
+
+## Endpoint
+
+```
+GET https://api.openpanel.dev/export/events
+```
+
+## Authentication
+
+<Warning>
+  This endpoint requires **both** `openpanel-client-id` and `openpanel-client-secret`. Requests with only a client ID will be rejected with `401 Unauthorized`. Only **read clients** (not write clients) can access the Export API.
+</Warning>
+
+## Rate limit
+
+100 requests per 10 seconds, keyed by `openpanel-client-id`. See [Rate Limits](/api-reference/rate-limits) for details.
+
+## Query parameters
+
+<ParamField query="projectId" type="string">
+  The ID of the project to export events from. Also accepted as `project_id`. If your client credential is scoped to a single project, this defaults to that project and can be omitted.
+</ParamField>
+
+<ParamField query="event" type="string | string[]">
+  Filter by event name. Pass multiple values to filter by several event names (e.g. `?event=page_view&event=button_clicked`).
+</ParamField>
+
+<ParamField query="profileId" type="string">
+  Filter events to a specific user profile ID.
+</ParamField>
+
+<ParamField query="start" type="string">
+  Start of the date range (inclusive). Accepts any string parseable by JavaScript's `Date` constructor, e.g. `2024-01-01` or `2024-01-01T00:00:00Z`.
+</ParamField>
+
+<ParamField query="end" type="string">
+  End of the date range (inclusive). Same format as `start`.
+</ParamField>
+
+<ParamField query="page" type="number" default="1">
+  Page number (1-indexed). Defaults to `1`.
+</ParamField>
+
+<ParamField query="limit" type="number" default="50">
+  Number of events per page. Minimum `1`, maximum `1000`. Defaults to `50`.
+</ParamField>
+
+<ParamField query="includes" type="string">
+  Comma-separated list of additional data to include in each event. Accepted values: `profile`, `meta`.
+
+  Example: `?includes=profile,meta`
+</ParamField>
+
+## Response
+
+<ResponseField name="meta" type="object" required>
+  Pagination metadata.
+  <Expandable title="properties">
+    <ResponseField name="meta.count" type="number">
+      Number of events in this page.
+    </ResponseField>
+    <ResponseField name="meta.totalCount" type="number">
+      Total number of events matching the query across all pages.
+    </ResponseField>
+    <ResponseField name="meta.pages" type="number">
+      Total number of pages.
+    </ResponseField>
+    <ResponseField name="meta.current" type="number">
+      Current page number (1-indexed).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data" type="object[]" required>
+  Array of event objects. Each event contains the tracked properties plus server-enriched fields such as geo-location, device info, and session details.
+</ResponseField>
+
+## Example
+
+<CodeGroup>
+
+```bash All events (last 50)
+curl 'https://api.openpanel.dev/export/events?projectId=<project-id>' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Filter by event name and date range
+curl 'https://api.openpanel.dev/export/events?projectId=<project-id>&event=button_clicked&start=2024-01-01&end=2024-01-31&limit=100' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Filter by user profile and include profile data
+curl 'https://api.openpanel.dev/export/events?projectId=<project-id>&profileId=user_123&includes=profile,meta' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+```bash Paginate through results
+curl 'https://api.openpanel.dev/export/events?projectId=<project-id>&limit=100&page=2' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "meta": {
+    "count": 50,
+    "totalCount": 1240,
+    "pages": 25,
+    "current": 1
+  },
+  "data": [
+    {
+      "id": "evt_01j2k3l4m5n6",
+      "name": "button_clicked",
+      "profileId": "user_123",
+      "projectId": "proj_abc",
+      "timestamp": "2024-01-15T10:23:45.000Z",
+      "properties": {
+        "button_label": "Sign up",
+        "page": "/pricing"
+      },
+      "country": "US",
+      "city": "San Francisco",
+      "region": "California",
+      "browser": "Chrome",
+      "browser_version": "120.0",
+      "os": "macOS",
+      "os_version": "14.0",
+      "device": "desktop"
+    }
+  ]
+}
+```
+
+## Error responses
+
+| Status | Description |
+|--------|-------------|
+| `400 Bad Request` | Missing `projectId` (when not derivable from client) or invalid query parameters. |
+| `401 Unauthorized` | Missing or invalid client ID or secret. |
+| `403 Forbidden` | Valid credentials but the client does not have access to the requested project. |
+| `404 Not Found` | The specified `projectId` does not exist in your organization. |
+| `429 Too Many Requests` | Rate limit exceeded. Wait 10 seconds before retrying. |

@@ -1,0 +1,117 @@
+---
+title: "Self-hosting overview"
+description: "Run OpenPanel on your own infrastructure using Docker Compose. You own the data, the infrastructure, and the configuration."
+---
+
+Self-hosting OpenPanel means you run every service on your own server. No data leaves your infrastructure, and you are free to configure every component to meet your security, compliance, and performance requirements.
+
+<Note>
+  If you want to get started quickly without managing infrastructure, the cloud service at [dashboard.openpanel.dev](https://dashboard.openpanel.dev) is fully managed and free to try.
+</Note>
+
+## Architecture
+
+A self-hosted OpenPanel deployment consists of the following services, all defined in a single Docker Compose file.
+
+| Service | Image | Role |
+|---|---|---|
+| `op-dashboard` | `lindesvard/openpanel-dashboard:2` | Next.js dashboard UI |
+| `op-api` | `lindesvard/openpanel-api:2` | Fastify event API + tRPC backend |
+| `op-worker` | `lindesvard/openpanel-worker:2` | BullMQ background job processor |
+| `op-db` | `postgres:14-alpine` | Relational store for users, projects, and configuration |
+| `op-ch` | `clickhouse/clickhouse-server:25.10.2.65` | Column store for all analytics events |
+| `op-kv` | `redis:7.2.5-alpine` | Cache, pub/sub, and job queue |
+| `op-proxy` | `caddy:2-alpine` | Reverse proxy with automatic HTTPS |
+
+### Service dependencies
+
+```
+op-proxy
+  └── op-dashboard
+  └── op-api
+        └── op-db
+        └── op-ch
+        └── op-kv
+              └── op-worker
+```
+
+All services use Docker health checks. The proxy only starts once both `op-dashboard` and `op-api` are healthy. Migrations run automatically inside the `op-api` container on start.
+
+## Prerequisites
+
+- **Docker** — [Install Docker Engine](https://docs.docker.com/engine/install/)
+- **Docker Compose** — included with Docker Desktop; for Linux servers install the `docker-compose-plugin`
+- A domain name pointed at your server (required for Caddy's automatic TLS)
+
+<Tip>
+  The setup script at `self-hosting/setup` can install Docker and Node.js automatically on Ubuntu if they are not already present.
+</Tip>
+
+## System requirements
+
+Minimum recommended specifications for a single-server deployment.
+
+| Resource | Recommended |
+|---|---|
+| CPU | 2 vCPUs |
+| Memory | 4 GB RAM |
+| Disk | 20 GB SSD (plus growth for ClickHouse event data) |
+| OS | Ubuntu 22.04 LTS or equivalent Linux distro |
+
+<Warning>
+  ClickHouse is the largest consumer of disk space. Provision extra storage or configure a retention policy if you expect high event volumes.
+</Warning>
+
+For higher-traffic deployments, `op-worker` supports horizontal scaling via the `OP_WORKER_REPLICAS` environment variable in Docker Compose.
+
+## Environment variables
+
+A self-hosted deployment is configured through a `.env` file. The template below shows all required variables.
+
+```bash
+NODE_ENV="production"
+SELF_HOSTED="true"
+BATCH_SIZE="5000"
+BATCH_INTERVAL="10000"
+ALLOW_REGISTRATION="false"
+ALLOW_INVITATION="true"
+
+REDIS_URL="redis://op-kv:6379"
+CLICKHOUSE_URL="http://op-ch:8123"
+DATABASE_URL="postgresql://postgres:postgres@op-db:5432/openpanel"
+DATABASE_URL_DIRECT="postgresql://postgres:postgres@op-db:5432/openpanel"
+
+DASHBOARD_URL="https://your-dashboard-domain.com"
+API_URL="https://your-api-domain.com"
+
+COOKIE_SECRET="a-long-random-secret"
+
+# Optional — email via Resend
+EMAIL_SENDER="noreply@your-domain.com"
+RESEND_API_KEY="re_..."
+```
+
+### Key variables to understand
+
+| Variable | Default | Description |
+|---|---|---|
+| `ALLOW_REGISTRATION` | `false` | When `false`, public sign-up is disabled. Create your first account via invitation or by temporarily setting this to `true`. |
+| `ALLOW_INVITATION` | `true` | Allow existing users to invite others. |
+| `BATCH_SIZE` | `5000` | Number of events processed per ClickHouse insert batch. |
+| `BATCH_INTERVAL` | `10000` | Milliseconds between batch flushes. |
+| `SELF_HOSTED` | `true` | Tells the application it is running in self-hosted mode. Do not change. |
+
+<Warning>
+  `ALLOW_REGISTRATION` defaults to `false` in the template. If you leave it as `false` and do not set up email invitations, you will not be able to create any user accounts. Set it to `true` temporarily to create your first admin account, then set it back to `false`.
+</Warning>
+
+## Deployment guides
+
+<CardGroup cols={2}>
+  <Card title="Docker Compose setup" icon="docker" href="/self-hosting/docker">
+    Step-by-step guide to deploying OpenPanel with Docker Compose on a Linux server.
+  </Card>
+  <Card title="Configuration reference" icon="sliders" href="/self-hosting/configuration">
+    Full reference for all environment variables, Caddy configuration, and ClickHouse tuning options.
+  </Card>
+</CardGroup>

@@ -1,0 +1,79 @@
+---
+title: 'Rate Limits'
+description: 'Understand OpenPanel API rate limits and how to handle 429 responses.'
+---
+
+OpenPanel enforces rate limits to ensure fair usage and protect service reliability. Different API surfaces have different limits.
+
+## Tracking API
+
+The tracking endpoints (`POST /track`, `POST /event`) are designed for high-throughput event ingestion. They do not enforce a hard per-client rate limit under normal conditions. The system is built to handle large volumes of events in parallel.
+
+<Tip>
+  For best performance when sending many events from a server, use queuing or batching at the application level. The official SDKs handle retry logic automatically.
+</Tip>
+
+## Export API
+
+The Export API (`GET /export/events`, `GET /export/charts`) is subject to a rate limit:
+
+| Limit | Window |
+|-------|--------|
+| 100 requests | 10 seconds |
+
+This limit is applied per **client ID** (`openpanel-client-id` header). If the client ID is not present, the limit falls back to the source IP address.
+
+## 429 Too Many Requests
+
+When you exceed the rate limit, the API responds with HTTP `429`:
+
+```json
+{
+  "statusCode": 429,
+  "error": "Too Many Requests",
+  "message": "You have exceeded the rate limit for this endpoint."
+}
+```
+
+### Handling 429 responses
+
+<Steps>
+  <Step title="Detect the 429 status code">
+    Check the HTTP status code in your response handler. Do not treat it as a permanent error.
+  </Step>
+  <Step title="Wait before retrying">
+    The rate limit window is 10 seconds. Wait at least 10 seconds before retrying the request.
+  </Step>
+  <Step title="Use exponential back-off for repeated failures">
+    If you hit the limit consistently, implement exponential back-off: wait 10s, then 20s, then 40s, and so on, up to a reasonable maximum.
+  </Step>
+</Steps>
+
+```bash
+# Example: simple retry with a 10-second wait
+curl --retry 3 --retry-delay 10 \
+  'https://api.openpanel.dev/export/events?projectId=<project-id>' \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>'
+```
+
+## Best practices
+
+**Cache export results.** If your dashboard or reporting tool polls the Export API, cache results locally and refresh on a schedule rather than on every page load.
+
+**Reduce unnecessary polling.** Only request the data range you need. Use the `start` and `end` parameters on `/export/events` to limit result sets.
+
+**Use the Tracking API for ingestion.** Never use the Export API to mirror or proxy events back into another system in real time. Events should be ingested through the Tracking API.
+
+**SDK retry logic.** The official OpenPanel SDKs retry failed requests automatically using exponential back-off. If you are implementing a custom integration, replicate this behavior.
+
+## Rate limit key
+
+The rate limit key is resolved in this order:
+
+1. `openpanel-client-id` header
+2. `x-real-ip` header
+3. `x-client-ip` header
+4. `x-forwarded-for` header
+
+If none of these are present, the request will be rejected before rate limiting is evaluated.

@@ -1,97 +1,78 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "OpenPanel Documentation"
+description: "Open-source web and product analytics — a privacy-first alternative to Mixpanel with optional self-hosting."
 ---
 
-## Setting up
+## Welcome to OpenPanel
 
-Get your documentation site up and running in minutes.
+OpenPanel is an open-source analytics platform that gives you the power of Mixpanel with the simplicity of Plausible — and full control over your data. Track events, understand users, replay sessions, and build dashboards, all without sacrificing privacy.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get OpenPanel running on your site in under 5 minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Self-Hosting" icon="server" href="/self-hosting/overview">
+    Run OpenPanel on your own infrastructure with Docker.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="SDK Reference" icon="code" href="/sdks/web">
+    Integrate with Web, Next.js, React Native, Node.js, and more.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="terminal" href="/api-reference/authentication">
+    Use the REST API to track events and export data programmatically.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Key Features
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Real-time Dashboards" icon="chart-line">
+    Live data updates, funnels, cohort analysis, and retention charts.
+  </Card>
+  <Card title="Session Replay" icon="video">
+    Record and replay user sessions with built-in privacy controls — no usage caps.
+  </Card>
+  <Card title="User Profiles" icon="user">
+    Identify users, track profile properties, and view full session histories.
+  </Card>
+  <Card title="Group Analytics" icon="users">
+    Associate events and users with organizations, accounts, or any custom group.
+  </Card>
+  <Card title="Privacy-First" icon="shield">
+    Cookieless tracking, GDPR compliance, and no third-party data sharing.
+  </Card>
+  <Card title="Multi-Platform SDKs" icon="puzzle-piece">
+    Official SDKs for Web, Next.js, React Native, Astro, Nuxt, and Node.js.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Why OpenPanel?
 
-## Need inspiration?
+| Feature | OpenPanel | Mixpanel | GA4 | Plausible |
+|---------|-----------|----------|-----|-----------|
+| Open-source | ✅ | ❌ | ❌ | ✅ |
+| Self-hosting | ✅ | ❌ | ❌ | ✅ |
+| Cookieless by default | ✅ | ❌ | ❌ | ✅ |
+| Real-time dashboards | ✅ | ✅ | ❌ | ✅ |
+| Funnels & cohort analysis | ✅ | ✅ | ✅ | ✅ |
+| User profiles & session history | ✅ | ✅ | ❌ | ❌ |
+| Session replay | ✅ | ✅ | ❌ | ❌ |
+| A/B testing | ✅ | ✅ | ❌ | ❌ |
+| Revenue tracking | ✅ | ✅ | ✅ | ❌ |
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
+## Get Started
+
+<Steps>
+  <Step title="Create a project">
+    Sign up at [dashboard.openpanel.dev](https://dashboard.openpanel.dev) and create a new project to get your Client ID.
+  </Step>
+  <Step title="Install an SDK">
+    Add OpenPanel to your app using one of the official SDKs for your platform.
+  </Step>
+  <Step title="Track your first event">
+    Call `track()` with an event name and start seeing data in your dashboard within seconds.
+  </Step>
+</Steps>
+
+<Card title="Follow the Quickstart" icon="arrow-right" href="/quickstart">
+  Step-by-step guide to tracking your first event in under 5 minutes.
 </Card>

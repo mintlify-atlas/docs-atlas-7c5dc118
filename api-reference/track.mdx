@@ -1,0 +1,239 @@
+---
+title: 'Track Events'
+description: 'Send events to OpenPanel using the unified track endpoint.'
+---
+
+All event ingestion goes through a single endpoint. The `type` field in the request body determines what kind of operation is performed.
+
+## Endpoint
+
+```
+POST https://api.openpanel.dev/track
+```
+
+## Authentication
+
+Include your `openpanel-client-id` header on every request. For server-side calls, also include `openpanel-client-secret`. See [Authentication](/api-reference/authentication) for details.
+
+## Request body
+
+<ParamField body="type" type="string" required>
+  The type of tracking operation to perform. One of:
+  - `track` — record a custom event
+  - `identify` — create or update a user profile
+  - `group` — create or update a group
+  - `assign_group` — assign a user to one or more groups
+  - `increment` — increment a numeric property on a user profile
+  - `decrement` — decrement a numeric property on a user profile
+  - `replay` — send a session replay chunk
+</ParamField>
+
+<ParamField body="payload" type="object" required>
+  The payload object. Its shape depends on the value of `type`. See the sections below.
+</ParamField>
+
+## type: `track`
+
+Record a custom named event.
+
+<ParamField body="payload.name" type="string" required>
+  The event name. Cannot be `session_start` or `session_end` (reserved). Must not be empty.
+</ParamField>
+
+<ParamField body="payload.profileId" type="string | number">
+  The ID of the user associated with this event. Links the event to an existing or new profile.
+</ParamField>
+
+<ParamField body="payload.groups" type="string[]">
+  Array of group IDs to associate with this event.
+</ParamField>
+
+<ParamField body="payload.properties" type="object">
+  Arbitrary key-value properties to attach to the event. Values can be any JSON-serializable type.
+
+  **Special properties** (prefixed with `__`) are interpreted by the server:
+
+  | Property | Description |
+  |----------|-------------|
+  | `__timestamp` | ISO 8601 datetime string. Overrides the server timestamp. If more than 1 minute in the future, the server timestamp is used instead. Events with a timestamp older than 15 minutes are accepted but flagged as past-dated. |
+  | `__ip` | Override the IP address used for geo-location (server-side only). |
+  | `__deviceId` | Override the computed device ID. |
+  | `__revenue` | Integer amount in the smallest currency unit (e.g. cents). Must be a non-negative integer. Only allowed with a client secret unless `allowUnsafeRevenueTracking` is enabled for the project. |
+  | `__identify` | Inline identify payload. If present, a profile upsert is performed alongside the event. |
+</ParamField>
+
+## type: `identify`
+
+Create or update a user profile. See [Identify Users](/api-reference/identify) for the full reference.
+
+## type: `group`
+
+Create or update a group. See [Groups](/api-reference/groups) for the full reference.
+
+## type: `assign_group`
+
+Assign a user to one or more groups. See [Groups](/api-reference/groups) for the full reference.
+
+## type: `increment`
+
+Increment a numeric property on a user profile by a given amount.
+
+<ParamField body="payload.profileId" type="string" required>
+  The ID of the profile to update.
+</ParamField>
+
+<ParamField body="payload.property" type="string" required>
+  Dot-notation path to the property to increment (e.g. `purchases_count` or `stats.logins`).
+</ParamField>
+
+<ParamField body="payload.value" type="number">
+  Positive number to add. Defaults to `1` if not provided.
+</ParamField>
+
+## type: `decrement`
+
+Decrement a numeric property on a user profile by a given amount.
+
+<ParamField body="payload.profileId" type="string" required>
+  The ID of the profile to update.
+</ParamField>
+
+<ParamField body="payload.property" type="string" required>
+  Dot-notation path to the property to decrement.
+</ParamField>
+
+<ParamField body="payload.value" type="number">
+  Positive number to subtract. Defaults to `1` if not provided.
+</ParamField>
+
+## type: `replay`
+
+Send a session replay chunk. Used internally by the browser SDK.
+
+<ParamField body="payload.chunk_index" type="number" required>
+  Zero-based index of this chunk within the replay session. Integer between 0 and 65535.
+</ParamField>
+
+<ParamField body="payload.events_count" type="number" required>
+  Number of events contained in this chunk. Must be at least 1.
+</ParamField>
+
+<ParamField body="payload.is_full_snapshot" type="boolean" required>
+  Whether this chunk contains a full DOM snapshot.
+</ParamField>
+
+<ParamField body="payload.started_at" type="string" required>
+  ISO 8601 datetime string for when this chunk started.
+</ParamField>
+
+<ParamField body="payload.ended_at" type="string" required>
+  ISO 8601 datetime string for when this chunk ended.
+</ParamField>
+
+<ParamField body="payload.payload" type="string" required>
+  Serialized replay data. Maximum 2 MB.
+</ParamField>
+
+## Response
+
+On success the endpoint returns HTTP `200` with the following body:
+
+<ResponseField name="deviceId" type="string" required>
+  The device ID computed for this request. Used by SDKs to correlate events from the same device across sessions.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string" required>
+  The session ID associated with the current session for this device.
+</ResponseField>
+
+## Examples
+
+<CodeGroup>
+
+```bash Track a custom event
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "track",
+    "payload": {
+      "name": "button_clicked",
+      "profileId": "user_123",
+      "properties": {
+        "button_label": "Sign up",
+        "page": "/pricing"
+      }
+    }
+  }'
+```
+
+```bash Track with server-side auth
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "track",
+    "payload": {
+      "name": "order_placed",
+      "profileId": "user_123",
+      "properties": {
+        "order_id": "ord_456",
+        "__revenue": 4999
+      }
+    }
+  }'
+```
+
+```bash Track with custom timestamp
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "track",
+    "payload": {
+      "name": "file_exported",
+      "profileId": "user_123",
+      "properties": {
+        "format": "csv",
+        "__timestamp": "2024-03-01T14:30:00.000Z"
+      }
+    }
+  }'
+```
+
+</CodeGroup>
+
+```json Response
+{
+  "deviceId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "sessionId": "sess_7g8h9i0j"
+}
+```
+
+## Validation errors
+
+If the request body fails validation, the API returns HTTP `400`:
+
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Validation failed",
+  "errors": [
+    {
+      "code": "invalid_type",
+      "path": ["payload", "name"],
+      "message": "Required"
+    }
+  ]
+}
+```
+
+<Note>
+  The event names `session_start` and `session_end` are reserved by OpenPanel and cannot be used in `type: track` payloads.
+</Note>

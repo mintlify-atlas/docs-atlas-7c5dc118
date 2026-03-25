@@ -1,0 +1,220 @@
+---
+title: "User Profiles"
+description: "Profiles represent the people who use your product. Learn how OpenPanel handles anonymous visitors, identified users, and profile properties."
+---
+
+A profile is a persistent record of a person who interacts with your product. OpenPanel creates profiles automatically for anonymous visitors and lets you enrich them with names, emails, and custom attributes when users identify themselves.
+
+## Anonymous vs identified users
+
+Every device that sends events gets a **device ID** — a deterministic identifier derived from the project ID, IP address, and user agent, rotated daily using salted hashing. Anonymous events are grouped by device ID.
+
+When you call `identify()`, OpenPanel links that device's events to a named **profile ID** — typically your internal user ID. From that point on, events from the device are associated with the profile rather than the anonymous device.
+
+```
+Anonymous visitor  →  deviceId: "d_8f3a..."
+After identify()   →  profileId: "user_123"
+```
+
+<Note>
+OpenPanel does not use browser cookies or localStorage for device identity. The device ID is computed server-side on every request, which means it works without cookie consent banners and is automatically consistent across subdomains.
+</Note>
+
+## Identifying a user
+
+Call `identify()` after you know who the user is — typically after login or registration.
+
+```typescript
+op.identify({
+  profileId: 'user_123',
+  firstName: 'Ada',
+  lastName: 'Lovelace',
+  email: 'ada@example.com',
+  avatar: 'https://example.com/avatars/ada.png',
+  properties: {
+    plan: 'pro',
+    signupSource: 'organic',
+  },
+});
+```
+
+Method signature:
+
+```typescript
+identify(payload: IdentifyPayload): Promise<...>
+```
+
+## IdentifyPayload type
+
+<ParamField path="body.profileId" type="string" required>
+  Your internal user ID. This is the primary key for the profile in OpenPanel.
+</ParamField>
+
+<ParamField path="body.firstName" type="string">
+  The user's first name.
+</ParamField>
+
+<ParamField path="body.lastName" type="string">
+  The user's last name.
+</ParamField>
+
+<ParamField path="body.email" type="string">
+  A valid email address. Validated as an email format.
+</ParamField>
+
+<ParamField path="body.avatar" type="string">
+  A fully-qualified URL to the user's avatar image. Validated as a URL.
+</ParamField>
+
+<ParamField path="body.properties" type="object">
+  Arbitrary custom attributes for the profile. Any key-value pairs are accepted.
+</ParamField>
+
+When `identify()` is called, OpenPanel also records the user's current country, city, region, OS, browser, and device — derived from the request's IP address and user agent — and stores them on the profile.
+
+## Calling identify with only a profileId
+
+Passing only `profileId` with no other fields tells OpenPanel which profile to associate with the current device, without creating or updating a profile record.
+
+```typescript
+// Links this device to user_123, but does not update profile fields
+op.identify({ profileId: 'user_123' });
+```
+
+This is useful when you know the user's ID but don't need to sync profile attributes on every page load.
+
+## Profile property persistence
+
+Profile properties are merged on every `identify()` call. Existing properties are preserved unless you overwrite them explicitly. There is no way to delete a specific property — set it to an empty string or `null` if you need to clear a value.
+
+```typescript
+// First call — sets plan to 'free'
+op.identify({
+  profileId: 'user_123',
+  properties: { plan: 'free' },
+});
+
+// Later call — updates plan to 'pro', firstName is unchanged
+op.identify({
+  profileId: 'user_123',
+  firstName: 'Ada',
+  properties: { plan: 'pro' },
+});
+```
+
+## Incrementing and decrementing profile properties
+
+Use `increment()` and `decrement()` to atomically adjust numeric profile properties. These are useful for counters like login count, messages sent, or items purchased.
+
+```typescript
+// Increment logins by 1 (default)
+op.increment({
+  profileId: 'user_123',
+  property: 'loginCount',
+});
+
+// Increment by a specific amount
+op.increment({
+  profileId: 'user_123',
+  property: 'creditsUsed',
+  value: 5,
+});
+
+// Decrement
+op.decrement({
+  profileId: 'user_123',
+  property: 'creditsRemaining',
+  value: 5,
+});
+```
+
+### IncrementPayload type
+
+<ParamField path="body.profileId" type="string" required>
+  The profile to update.
+</ParamField>
+
+<ParamField path="body.property" type="string" required>
+  The property name to increment. Dot notation is supported for nested properties (e.g. `stats.loginCount`).
+</ParamField>
+
+<ParamField path="body.value" type="number">
+  The positive amount to add. Defaults to `1`. Must be a positive number.
+</ParamField>
+
+### DecrementPayload type
+
+<ParamField path="body.profileId" type="string" required>
+  The profile to update.
+</ParamField>
+
+<ParamField path="body.property" type="string" required>
+  The property name to decrement. Dot notation is supported for nested properties.
+</ParamField>
+
+<ParamField path="body.value" type="number">
+  The positive amount to subtract. Defaults to `1`. Must be a positive number.
+</ParamField>
+
+<Warning>
+`increment()` and `decrement()` require that the property already exists and contains a parseable integer. If the property is missing or non-numeric, the API returns a 400 error.
+</Warning>
+
+## Waiting for a profile before sending events
+
+If you need every event to be linked to an identified profile, use the `waitForProfile` option. Events are queued in memory and flushed automatically when `identify()` is called.
+
+```typescript
+const op = new OpenPanel({
+  clientId: 'YOUR_CLIENT_ID',
+  waitForProfile: true,
+});
+
+// Queued — no profileId yet
+op.track('page_viewed', { path: '/dashboard' });
+
+// Queue is flushed with profileId attached to all queued events
+op.identify({ profileId: 'user_123' });
+```
+
+<Note>
+`waitForProfile` is marked as deprecated in the SDK in favour of the more explicit `disabled: true` + `ready()` pattern, but it remains fully supported.
+</Note>
+
+## Resetting a profile
+
+Call `clear()` to reset the current session's profile association. This removes the `profileId`, `groups`, `deviceId`, and `sessionId` from the SDK's in-memory state. Use it on logout.
+
+```typescript
+op.clear();
+```
+
+After `clear()`, subsequent events are sent anonymously until `identify()` is called again.
+
+## Server-side identification
+
+For server-side SDKs, pass `profileId` directly in `track()` properties to associate events without a separate `identify()` call.
+
+```typescript
+op.track('api_request', {
+  profileId: 'user_123',
+  endpoint: '/api/orders',
+  method: 'POST',
+});
+```
+
+You can also embed an identify payload inside a track event using the `__identify` reserved property:
+
+```typescript
+op.track('checkout_completed', {
+  __identify: {
+    profileId: 'user_123',
+    email: 'ada@example.com',
+    firstName: 'Ada',
+  },
+  orderId: 'ord_abc',
+  total: 4999,
+});
+```
+
+The API processes the embedded identify first, then records the track event against the newly created or updated profile.

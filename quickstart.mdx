@@ -1,80 +1,191 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Track your first event with OpenPanel in under 5 minutes using the cloud service."
 ---
 
-## Get started in three steps
+This guide uses the OpenPanel cloud service at [dashboard.openpanel.dev](https://dashboard.openpanel.dev). If you want to run OpenPanel on your own server, see [Self-hosting overview](/self-hosting/overview) first.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Create an account">
+    Go to [dashboard.openpanel.dev](https://dashboard.openpanel.dev) and sign up for a free account.
+  </Step>
 
-### Step 1: Set up your local environment
+  <Step title="Create a project">
+    After signing in, click **New project** and give it a name. A project groups your applications and websites together.
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Get your Client ID">
+    Open the project you just created and go to **Settings → Clients**. Copy the **Client ID** — you will need it in the next step.
 
-### Step 2: Deploy your changes
+    <Note>
+      The Client ID identifies which project receives your events. It is safe to include in client-side code. Do not confuse it with the Client Secret, which is only required for server-side integrations.
+    </Note>
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Step title="Install the SDK">
+    Choose how you want to load the SDK.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    <Tabs>
+      <Tab title="Script tag">
+        Add the following snippet to the `<head>` of your HTML page. Replace `YOUR_CLIENT_ID` with the value you copied.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+        ```html
+        <script src="https://openpanel.dev/op1.js" async defer></script>
+        <script>
+          window.op = window.op || function(...args) {
+            (window.op.q = window.op.q || []).push(args);
+          };
+          window.op('init', {
+            clientId: 'YOUR_CLIENT_ID',
+            trackScreenViews: true,
+            trackOutgoingLinks: true,
+            trackAttributes: true,
+          });
+        </script>
+        ```
 
-### Step 3: Go live
+        <Tip>
+          Setting `trackScreenViews: true` automatically records a `screen_view` event on every page navigation, including history API changes in single-page apps.
+        </Tip>
+      </Tab>
+      <Tab title="npm package">
+        Install the web SDK with your package manager.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+        <CodeGroup>
+          ```bash npm
+          npm install @openpanel/web
+          ```
+
+          ```bash yarn
+          yarn add @openpanel/web
+          ```
+
+          ```bash pnpm
+          pnpm add @openpanel/web
+          ```
+        </CodeGroup>
+
+        Then initialize the client once at the top level of your app.
+
+        ```typescript
+        import { OpenPanel } from '@openpanel/web';
+
+        const op = new OpenPanel({
+          clientId: 'YOUR_CLIENT_ID',
+          trackScreenViews: true,
+          trackOutgoingLinks: true,
+          trackAttributes: true,
+        });
+        ```
+
+        The `OpenPanel` constructor accepts the following options:
+
+        | Option | Type | Description |
+        |---|---|---|
+        | `clientId` | `string` | **Required.** Your project Client ID. |
+        | `clientSecret` | `string` | For server-side use only. Never expose in browser code. |
+        | `apiUrl` | `string` | Override the API endpoint. Defaults to `https://api.openpanel.dev`. |
+        | `trackScreenViews` | `boolean` | Automatically send `screen_view` on navigation. |
+        | `trackOutgoingLinks` | `boolean` | Automatically send `link_out` on external link clicks. |
+        | `trackAttributes` | `boolean` | Track clicks on elements with a `data-track` attribute. |
+        | `trackHashChanges` | `boolean` | Also fire `screen_view` on hash changes. |
+        | `disabled` | `boolean` | Queue all events until `ready()` is called. |
+        | `debug` | `boolean` | Log all SDK activity to the browser console. |
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Track your first event">
+    Call `track()` with an event name and optional properties.
+
+    ```typescript
+    // Script tag
+    window.op('track', 'signed_up', { plan: 'pro' });
+
+    // npm package
+    op.track('signed_up', { plan: 'pro' });
+    ```
+
+    Open the **Live** view in your OpenPanel dashboard. You should see the event appear within a few seconds.
+  </Step>
+</Steps>
+
+## Core SDK methods
+
+### `track(name, properties?)`
+
+Send a custom event. Properties are merged with any global properties you have set.
+
+```typescript
+op.track('page_cta_clicked', {
+  button: 'Get started',
+  location: 'hero',
+});
+```
+
+### `identify(payload)`
+
+Associate the current session with a known user. Call this after a user signs in.
+
+```typescript
+op.identify({
+  profileId: 'user_123',       // required
+  firstName: 'Jane',
+  lastName: 'Smith',
+  email: 'jane@example.com',
+  properties: {
+    plan: 'pro',
+    company: 'Acme Corp',
+  },
+});
+```
+
+After `identify()` is called, all subsequent `track()` calls are automatically linked to that user profile.
+
+### `screenView(path?, properties?)`
+
+Manually record a page view. If `trackScreenViews: true` is set, this is called automatically on every navigation.
+
+```typescript
+// Use current URL
+op.screenView();
+
+// Specify a path explicitly
+op.screenView('/pricing', { experiment: 'annual_discount' });
+```
+
+### `setGlobalProperties(properties)`
+
+Attach properties to every subsequent event automatically.
+
+```typescript
+op.setGlobalProperties({
+  app_version: '2.4.1',
+  environment: 'production',
+});
+```
+
+### `clear()`
+
+Reset the profile ID, groups, device ID, and session ID. Call this on sign-out.
+
+```typescript
+op.clear();
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Web SDK reference" icon="globe" href="/sdks/web">
+    Full API reference for the web SDK including session replay, revenue tracking, and group analytics.
+  </Card>
+  <Card title="Next.js SDK" icon="layer-group" href="/sdks/nextjs">
+    Drop-in component and hook-based API for Next.js apps.
+  </Card>
+  <Card title="Self-hosting" icon="server" href="/self-hosting/overview">
+    Run OpenPanel on your own infrastructure with Docker Compose.
+  </Card>
+  <Card title="API reference" icon="webhook" href="/api-reference/authentication">
+    Send events and query data directly via the HTTP API.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

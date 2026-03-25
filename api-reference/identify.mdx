@@ -1,0 +1,261 @@
+---
+title: 'Identify Users'
+description: 'Create and update user profiles in OpenPanel using the identify API.'
+---
+
+Identifying a user links events to a persistent profile. You can identify users through the unified track endpoint or through the dedicated profile endpoints.
+
+## Identify via the track endpoint
+
+```
+POST https://api.openpanel.dev/track
+```
+
+Send `type: "identify"` to create or update a user profile. If a profile with the given `profileId` already exists, it is merged with the new data.
+
+### Request body
+
+<ParamField body="type" type="string" required>
+  Must be `"identify"`.
+</ParamField>
+
+<ParamField body="payload.profileId" type="string" required>
+  A stable unique identifier for the user in your system (e.g. a database UUID or integer ID). Must not be empty.
+</ParamField>
+
+<ParamField body="payload.firstName" type="string">
+  The user's first name.
+</ParamField>
+
+<ParamField body="payload.lastName" type="string">
+  The user's last name.
+</ParamField>
+
+<ParamField body="payload.email" type="string">
+  The user's email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="payload.avatar" type="string">
+  A URL to the user's avatar image. Must be a valid URL.
+</ParamField>
+
+<ParamField body="payload.properties" type="object">
+  Arbitrary key-value properties to store on the profile. Existing properties are merged; new keys are added and existing keys are updated.
+</ParamField>
+
+### Response
+
+Returns HTTP `200` with device and session information:
+
+<ResponseField name="deviceId" type="string">
+  The computed device ID for this request.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  The session ID associated with this device.
+</ResponseField>
+
+### Example
+
+```bash
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "identify",
+    "payload": {
+      "profileId": "user_123",
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "email": "jane@example.com",
+      "avatar": "https://example.com/avatars/jane.png",
+      "properties": {
+        "plan": "pro",
+        "company": "Acme Corp"
+      }
+    }
+  }'
+```
+
+---
+
+## Update profile directly
+
+```
+POST https://api.openpanel.dev/profile
+```
+
+A dedicated endpoint for updating a user profile. Equivalent to `type: "identify"` via the track endpoint.
+
+### Request body
+
+<ParamField body="profileId" type="string" required>
+  The unique identifier for the profile to update.
+</ParamField>
+
+<ParamField body="firstName" type="string">
+  The user's first name.
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  The user's last name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  The user's email address.
+</ParamField>
+
+<ParamField body="avatar" type="string">
+  A URL to the user's avatar image.
+</ParamField>
+
+<ParamField body="properties" type="object">
+  Arbitrary key-value properties to store on the profile.
+</ParamField>
+
+### Response
+
+Returns HTTP `202` with the `profileId` string as the body.
+
+### Example
+
+```bash
+curl https://api.openpanel.dev/profile \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "profileId": "user_123",
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "email": "jane@example.com",
+    "properties": {
+      "plan": "pro"
+    }
+  }'
+```
+
+---
+
+## Increment a profile property
+
+```
+POST https://api.openpanel.dev/profile/increment
+```
+
+Add a positive number to a numeric property on a profile. The property must already exist and must hold a numeric value.
+
+You can also increment via the track endpoint with `type: "increment"`.
+
+### Request body
+
+<ParamField body="profileId" type="string" required>
+  The unique identifier for the profile.
+</ParamField>
+
+<ParamField body="property" type="string" required>
+  Dot-notation path to the property to increment (e.g. `login_count` or `stats.purchases`).
+</ParamField>
+
+<ParamField body="value" type="number">
+  Positive number to add to the current value. Defaults to `1`.
+</ParamField>
+
+### Response
+
+Returns HTTP `202` with the profile ID string as the body. Returns `404` if the profile does not exist, and `400` if the property value is not a number.
+
+### Example
+
+```bash
+curl https://api.openpanel.dev/profile/increment \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "profileId": "user_123",
+    "property": "login_count",
+    "value": 1
+  }'
+```
+
+---
+
+## Decrement a profile property
+
+```
+POST https://api.openpanel.dev/profile/decrement
+```
+
+Subtract a positive number from a numeric property on a profile. The property must already exist and must hold a numeric value.
+
+You can also decrement via the track endpoint with `type: "decrement"`.
+
+### Request body
+
+<ParamField body="profileId" type="string" required>
+  The unique identifier for the profile.
+</ParamField>
+
+<ParamField body="property" type="string" required>
+  Dot-notation path to the property to decrement.
+</ParamField>
+
+<ParamField body="value" type="number">
+  Positive number to subtract from the current value. Defaults to `1`.
+</ParamField>
+
+### Response
+
+Returns HTTP `202` with the profile ID string as the body. Returns `404` if the profile does not exist, and `400` if the property value is not a number.
+
+### Example
+
+```bash
+curl https://api.openpanel.dev/profile/decrement \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'openpanel-client-secret: <your-client-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "profileId": "user_123",
+    "property": "credits_remaining",
+    "value": 5
+  }'
+```
+
+---
+
+## Inline identify with a track event
+
+You can identify a user at the same time as tracking an event by embedding an `__identify` object inside the event properties:
+
+```bash
+curl https://api.openpanel.dev/track \
+  --request POST \
+  --header 'openpanel-client-id: <your-client-id>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "type": "track",
+    "payload": {
+      "name": "signed_up",
+      "profileId": "user_123",
+      "properties": {
+        "plan": "pro",
+        "__identify": {
+          "profileId": "user_123",
+          "email": "jane@example.com",
+          "firstName": "Jane"
+        }
+      }
+    }
+  }'
+```
+
+<Note>
+  The inline identify is only triggered when the `__identify` object contains more than just a `profileId`. If only `profileId` is present, no profile upsert occurs — the event is simply linked to that profile ID.
+</Note>
